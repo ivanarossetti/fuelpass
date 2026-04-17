@@ -395,6 +395,45 @@ tr:hover td{background:rgba(0,61,165,.02);}
     background: white !important;
   }
 }
+
+/* ══════════════════════════════════════
+   MENU LATERAL COLAPSÁVEL
+   ══════════════════════════════════════ */
+.nav-sec { margin-bottom: 2px; }
+
+.nav-sec-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  cursor: pointer;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--glt);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  transition: all .15s;
+  user-select: none;
+}
+.nav-sec-hdr:hover {
+  background: var(--gpl);
+  color: var(--gmd);
+}
+.nav-sec-lbl { font-size: 10px; }
+.nav-sec-arrow { font-size: 8px; opacity: .7; }
+
+.nav-sec-body {
+  padding-left: 4px;
+  border-left: 2px solid var(--gbd);
+  margin-left: 10px;
+  margin-bottom: 4px;
+}
+.nav-sec-body .nitem {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 </style>
 </head>
 <body>
@@ -617,6 +656,137 @@ tr:hover td{background:rgba(0,61,165,.02);}
   </div>
 </div>
 </div>
+<!-- ══ MODAL UTENTE (permissões) ══ -->
+<div class="moverlay" id="userModal">
+<div class="modal modal-lg">
+  <h3 id="umTitle">Nuovo Utente</h3>
+  <div class="mgrid">
+    <div class="fld">
+      <label>Nome Completo *</label>
+      <input id="um_name" type="text" placeholder="es: Mario Rossi"/>
+    </div>
+    <div class="fld">
+      <label>Username *</label>
+      <input id="um_user" type="text" placeholder="es: mario.rossi"/>
+    </div>
+    <div class="fld">
+      <label>Password <span style="font-size:10px;color:var(--gr)">(lascia vuoto per mantenere)</span></label>
+      <input id="um_pass" type="password" placeholder="••••••••"/>
+    </div>
+    <div class="fld">
+      <label>Tipo Utente</label>
+      <select id="um_role">
+        <option value="admin">Admin</option>
+        <option value="attendant">Operatore</option>
+        <option value="company">Cliente / Azienda</option>
+        <option value="employee">Dipendente</option>
+      </select>
+    </div>
+    <div class="fld">
+      <label>Cliente Collegato</label>
+      <select id="um_comp"></select>
+    </div>
+    <div class="fld">
+      <label>Punto Vendita Collegato</label>
+      <select id="um_pdv"></select>
+    </div>
+  </div>
+  <div class="fld gc2" style="margin-top:14px;">
+    <div style="font-size:10px;font-weight:700;color:#003DA5;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--blue-lt);">
+      &#128274; Permessi Utente — seleziona cosa può fare
+    </div>
+    <div id="um_perms_wrap">
+      <!-- Preenchido dinamicamente por openUser() -->
+    </div>
+  </div>
+  <div class="mactions">
+    <button class="btn btn-out" onclick="closeM('userModal')">Annulla</button>
+    <button class="btn btn-bl" onclick="saveUser()">&#10003; Salva Utente</button>
+  </div>
+</div>
+</div>
+<!-- ══ MODAL ORDINE / FATTURA ══ -->
+<div class="moverlay" id="ordineModal">
+<div class="modal modal-lg">
+  <h3>&#128178; Gestione Ordine</h3>
+
+  <!-- Info ordine (read-only) -->
+  <div style="background:var(--blue-lt);border:1px solid rgba(0,61,165,.15);border-radius:9px;padding:13px 16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+    <div><div style="font-size:9px;font-weight:700;color:#003DA5;letter-spacing:.08em;text-transform:uppercase;">N° Ordine</div>
+      <div id="om_numero" style="font-size:15px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#003DA5;"></div></div>
+    <div><div style="font-size:9px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;">Cliente</div>
+      <div id="om_cliente" style="font-size:13px;font-weight:600;"></div></div>
+    <div><div style="font-size:9px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;">Data Emissione</div>
+      <div id="om_data" style="font-size:13px;"></div></div>
+    <div><div style="font-size:9px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;">Totale Ordine</div>
+      <div id="om_totale" style="font-size:20px;font-weight:900;color:#003DA5;"></div></div>
+    <div style="grid-column:2/4;"><div style="font-size:9px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;">Voucher</div>
+      <div id="om_qtd" style="font-size:13px;color:var(--gmd);"></div></div>
+  </div>
+
+  <!-- Fattura e Pagamento -->
+  <div style="font-size:10px;font-weight:700;color:#003DA5;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--blue-lt);">
+    &#128196; Fattura
+  </div>
+  <div class="mgrid" style="margin-bottom:16px;">
+    <div class="fld">
+      <label>N° Fattura</label>
+      <input id="om_nfattura" type="text" placeholder="es: FT-2026-001"/>
+    </div>
+    <div class="fld">
+      <label>Data Fattura</label>
+      <input id="om_dfattura" type="date"/>
+    </div>
+  </div>
+
+  <div style="font-size:10px;font-weight:700;color:#059669;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--gnbd);">
+    &#128176; Pagamento
+  </div>
+  <div class="mgrid" style="margin-bottom:16px;">
+    <div class="fld">
+      <label>Data Pagamento</label>
+      <input id="om_dpagamento" type="date"/>
+    </div>
+    <div class="fld">
+      <label>Forma di Pagamento</label>
+      <select id="om_fpagamento">
+        <option value="bonifico">Bonifico Bancario</option>
+        <option value="contanti">Contanti</option>
+        <option value="assegno">Assegno</option>
+        <option value="carta">Carta di Credito</option>
+        <option value="paypal">PayPal / Stripe</option>
+        <option value="altro">Altro</option>
+      </select>
+    </div>
+    <div class="fld gc2">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+        <input id="om_pagato" type="checkbox" style="width:16px;height:16px;accent-color:#059669;">
+        <span>&#128994; Segna come <strong>PAGATO</strong></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="fld" style="margin-bottom:16px;">
+    <label>Note interne</label>
+    <textarea id="om_note" rows="2" placeholder="Note facoltative..." style="resize:vertical;"></textarea>
+  </div>
+
+  <!-- Lista vouchers collegati -->
+  <div style="font-size:10px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">
+    &#127915; Voucher collegati a questo ordine
+  </div>
+  <div id="om_vouchers_list" style="max-height:120px;overflow-y:auto;background:var(--gpl);border:1px solid var(--gbd);border-radius:8px;padding:8px 12px;margin-bottom:16px;"></div>
+
+  <div class="mactions">
+    <button class="btn btn-out" onclick="closeM('ordineModal')">Annulla</button>
+    <button class="btn btn-bl" onclick="saveOrdine()">&#10003; Salva Modifiche</button>
+  </div>
+</div>
+</div>
+
+
+
+
 
 <div class="twrap" id="toastWrap"></div>
 <div id="printArea" style="display:none;"></div>
@@ -723,10 +893,33 @@ function loadAllData(callback){
       });
   });
 
-  sbFetch('/ordini?select=*&order=data_emissione.desc', 'GET')
-    .then(function(r){ return r.ok ? r.json() : []; })
-    .then(function(data){ _cache.ordini = Array.isArray(data) ? data : []; })
-    .catch(function(){ _cache.ordini = []; });
+  // ordini incluído no Promise.all para garantir que chega antes do callback
+  tasks.push(
+    sbFetch('/ordini?select=*&order=data.desc', 'GET')
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(data){
+        _cache.ordini = Array.isArray(data) ? data.map(function(o){
+          return {
+            id:             o.id,
+            numero:         o.numero||'',
+            data:           o.data||'',
+            clienteId:      o.cliente_id||'',
+            clienteNome:    o.cliente_nome||'',
+            voucherIds:     o.voucher_ids||[],
+            qtd:            o.qtd||0,
+            valore:         o.valore||0,
+            totale:         o.totale||0,
+            nFattura:       o.n_fattura||'',
+            dataFattura:    o.data_fattura||'',
+            dataPagamento:  o.data_pagamento||'',
+            formaPagamento: o.forma_pagamento||'',
+            pagato:         o.pagato||false,
+            note:           o.note||''
+          };
+        }) : [];
+      })
+      .catch(function(e){ console.warn('ordini load:', e); _cache.ordini = []; })
+  );
 
   Promise.all(tasks).then(function(){
     _cacheLoaded = true;
@@ -738,7 +931,7 @@ function loadAllData(callback){
 // ══════════════════════════════════════════════════════
 // STATO GLOBALE
 // ══════════════════════════════════════════════════════
-var CU=null, _scanId=null, _editUser=null, _editCliente=null, _editPdv=null;
+var CU=null, _scanId=null, _editUser=null, _editCliente=null, _editPdv=null, _editOrdine=null;
 var _editMsg=null, _editVoucher=null, _clLogo=null, _pdvLogo=null;
 var _qrV=null, _batchIds=[], _editStazione=null, _stLogo=null;
 var _SECRET='ENL2025-DOLOMITE-VCR';
@@ -751,6 +944,31 @@ function dbGet(k){return _cache[k]||[];}
 function dbSet(k,v){_cache[k]=v;}
 function getVouchers(){return _cache.vouchers.slice();}
 function getUsers(){return _cache.users.slice();}
+function getOrdini(){return (_cache.ordini||[]).slice();}
+function setOrdini(arr){
+  _cache.ordini = arr.slice();
+  // Guardar no Supabase — mapear para colunas da tabela
+  var sbArr = arr.map(function(o){
+    return {
+      id:              o.id,
+      numero:          o.numero||'',
+      data:            o.data||'',
+      cliente_id:      o.clienteId||null,
+      cliente_nome:    o.clienteNome||'',
+      voucher_ids:     o.voucherIds||[],
+      qtd:             o.qtd||0,
+      valore:          o.valore||0,
+      totale:          o.totale||0,
+      n_fattura:       o.nFattura||'',
+      data_fattura:    o.dataFattura||null,
+      data_pagamento:  o.dataPagamento||null,
+      forma_pagamento: o.formaPagamento||'',
+      pagato:          o.pagato||false,
+      note:            o.note||''
+    };
+  });
+  sbUpsert('ordini', sbArr).catch(function(e){console.warn('sync ordini',e);});
+}
 function getClienti(){return _cache.clienti.slice();}
 function getStazioni(){return _cache.stazioni.slice();}
 function getPdv(){return _cache.pdv.slice();}
@@ -892,10 +1110,10 @@ function seed(){
   // Crea utenti base solo se non esistono
   if(_cache.users.length===0){
     setUsers([
-      {id:'U1',name:'Admin Principale',user:'admin',pass:'1234',role:'admin',clienteId:''},
-      {id:'U2',name:'Luca Operatore',user:'operatore',pass:'1234',role:'attendant',clienteId:''},
-      {id:'U3',name:'Responsabile',user:'azienda',pass:'1234',role:'company',clienteId:''},
-      {id:'U4',name:'Dipendente',user:'dipendente',pass:'1234',role:'employee',clienteId:''}
+      {id:'U1',name:'Admin Principale',user:'admin',pass:'1234',role:'admin',clienteId:'',pdvId:'',perms:ROLE_PERMS.admin},
+      {id:'U2',name:'Operatore PdV',user:'operatore',pass:'1234',role:'attendant',clienteId:'',pdvId:'',perms:ROLE_PERMS.attendant},
+      {id:'U3',name:'Cliente Azienda',user:'azienda',pass:'1234',role:'company',clienteId:'',pdvId:'',perms:ROLE_PERMS.company},
+      {id:'U4',name:'Dipendente',user:'dipendente',pass:'1234',role:'employee',clienteId:'',pdvId:'',perms:ROLE_PERMS.employee}
     ]);
   }
   // Crea messaggio standard solo se non esistono
@@ -946,41 +1164,69 @@ function logout(){addLog('logout','Disconnessione');CU=null;document.getElementB
 // ══════════════════════════════════════════════════════
 // NAV
 // ══════════════════════════════════════════════════════
-var NAVCONF={
-  admin:[
-    ['','Gestione',''],
-    ['dash','&#128202;','Dashboard'],
-    ['vouchers','&#127915;','Voucher'],
-    ['batch','&#9889;','Emissione Lotto'],
-    ['scan','&#128269;','Valida Voucher'],
-    ['stampa','&#128424;','Stampa / Ristampa'],
-    ['lista','&#128203;','Emissione da Lista'],
-    ['','Anagrafiche',''],
-    ['clienti','&#128101;','Clienti'],
-    ['pdv','&#128205;','Punti Vendita'],
-    ['msgs','&#128172;','Messaggi'],
-    ['','Amministrazione',''],
-    ['users','&#128101;','Utenti'],
-    ['reports','&#128200;','Report'],
-    ['finance','&#128178;','Finanziario'],
-    ['log','&#128203;','Registro Attività'],
-    ['settings','&#9881;','Impostazioni']
-  ],
-  attendant:[
-    ['scan','&#128269;','Valida Voucher'],
-    ['stampa','&#128424;','Stampa / Ristampa'],
-    ['lista','&#128203;','Emissione da Lista'],
-    ['vouchers','&#127915;','Voucher'],
-    ['reports','&#128200;','Report']
-  ],
-  company:[
-    ['order','&#128722;','Nuovo Voucher'],
-    ['myvouchers','&#127915;','I Miei Voucher'],
-    ['reports','&#128200;','Report']
-  ],
-  employee:[['mycards','&#128179;','I Miei Voucher']]
+var NAVCONF=[
+  {sec:'Anagrafiche', icon:'&#128101;', id:'sec_ana', pages:[
+    {id:'clienti',icon:'&#127970;', lbl:'Clienti'},
+    {id:'pdv',    icon:'&#128205;', lbl:'Punti Vendita'},
+    {id:'msgs',   icon:'&#128172;', lbl:'Messaggi Legali'},
+    {id:'users',  icon:'&#128100;', lbl:'Utenti'}
+  ]},
+  {sec:'Operazioni', icon:'&#9889;', id:'sec_op', pages:[
+    {id:'dash',   icon:'&#128202;', lbl:'Dashboard'},
+    {id:'vouchers',icon:'&#127915;',lbl:'Voucher'},
+    {id:'batch',  icon:'&#9889;',   lbl:'Emissione Lotto'},
+    {id:'lista',  icon:'&#128203;', lbl:'Emissione da Lista'},
+    {id:'scan',   icon:'&#128269;', lbl:'Valida Voucher'},
+    {id:'stampa', icon:'&#128424;', lbl:'Stampa / Ristampa'}
+  ]},
+  {sec:'Finanziario', icon:'&#128178;', id:'sec_fin', pages:[
+    {id:'finance',icon:'&#128200;', lbl:'Ordini & Pagamenti'},
+    {id:'liquidazioni',icon:'&#128260;',lbl:'Liquidazioni PdV'},
+    {id:'findash',icon:'&#128202;', lbl:'Dashboard Finanziario'}
+  ]},
+  {sec:'Report', icon:'&#128196;', id:'sec_rep', pages:[
+    {id:'reports',    icon:'&#128196;', lbl:'Report Voucher'},
+    {id:'rep_scadenza',icon:'&#9200;', lbl:'In Scadenza'},
+    {id:'rep_storico', icon:'&#128203;',lbl:'Storico Utilizzi'}
+  ]},
+  {sec:'Sistema', icon:'&#9881;', id:'sec_sys', pages:[
+    {id:'log',     icon:'&#128203;', lbl:'Registro Attività'},
+    {id:'settings',icon:'&#9881;',   lbl:'Impostazioni'}
+  ]}
+];
+
+// Tutte le pagine disponibili con permesso richiesto
+var ALLPAGES={
+  dash:     {lbl:'Dashboard',         icon:'&#128202;', perm:'dash'},
+  vouchers: {lbl:'Voucher',           icon:'&#127915;', perm:'vouchers'},
+  batch:    {lbl:'Emissione Lotto',   icon:'&#9889;',   perm:'batch'},
+  lista:    {lbl:'Emissione da Lista',icon:'&#128203;', perm:'lista'},
+  scan:     {lbl:'Valida Voucher',    icon:'&#128269;', perm:'scan'},
+  stampa:   {lbl:'Stampa / Ristampa', icon:'&#128424;', perm:'stampa'},
+  clienti:  {lbl:'Clienti',          icon:'&#127970;', perm:'clienti'},
+  pdv:      {lbl:'Punti Vendita',     icon:'&#128205;', perm:'pdv'},
+  msgs:     {lbl:'Messaggi Legali',   icon:'&#128172;', perm:'msgs'},
+  users:    {lbl:'Utenti',           icon:'&#128100;', perm:'users'},
+  finance:  {lbl:'Ordini & Pagamenti',icon:'&#128178;', perm:'finance'},
+  liquidazioni:{lbl:'Liquidazioni PdV',icon:'&#128260;',perm:'liquidazioni'},
+  findash:  {lbl:'Dashboard Fin.',   icon:'&#128202;', perm:'findash'},
+  reports:  {lbl:'Report Voucher',   icon:'&#128196;', perm:'reports'},
+  rep_scadenza:{lbl:'In Scadenza',   icon:'&#9200;',   perm:'rep_scadenza'},
+  rep_storico: {lbl:'Storico Utilizzi',icon:'&#128203;',perm:'rep_storico'},
+  log:      {lbl:'Registro Attività',icon:'&#128203;', perm:'log'},
+  settings: {lbl:'Impostazioni',     icon:'&#9881;',   perm:'settings'},
+  order:    {lbl:'Nuovo Voucher',    icon:'&#128722;', perm:'order'},
+  myvouchers:{lbl:'I Miei Voucher',  icon:'&#127915;', perm:'myvouchers'},
+  mycards:  {lbl:'I Miei Voucher',   icon:'&#128179;', perm:'mycards'}
 };
 
+// Permissões por role (compatibilidade retroactiva)
+var ROLE_PERMS={
+  admin:    ['dash','vouchers','batch','lista','scan','stampa','clienti','pdv','msgs','users','finance','liquidazioni','findash','reports','rep_scadenza','rep_storico','log','settings'],
+  attendant:['scan','stampa','lista','vouchers','reports','rep_scadenza','rep_storico'],
+  company:  ['order','myvouchers','reports'],
+  employee: ['mycards']
+};
 function initApp(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='block';
@@ -992,25 +1238,75 @@ function initApp(){
   // Nascondere ricerca globale per ruoli non admin/attendant
   if(CU.role==='employee')document.getElementById('gsearchWrap').style.display='none';
   buildNav();
-  var items=NAVCONF[CU.role]||[];
-  var first=null;
-  for(var i=0;i<items.length;i++){if(items[i][0]&&items[i][0]!==''){first=items[i][0];break;}}
+  // Gerar ordini retroativos para vouchers sem ordine
+  if(CU.role==='admin'){
+    setTimeout(function(){
+      var n = gerarOrdiniRetroativos();
+      if(n>0) showToast(n+' ordini retroativi creati automaticamente!','info');
+    }, 1500);
+  }
+  // Navegar para a primeira página acessível
+  var perms = getUserPerms(CU);
+  var first = null;
+  for(var si=0; si<NAVCONF.length; si++){
+    var sec = NAVCONF[si];
+    for(var pi=0; pi<sec.pages.length; pi++){
+      var pg = sec.pages[pi];
+      if(perms.indexOf(pg.perm||pg.id) > -1){ first=pg.id; break; }
+    }
+    if(first) break;
+  }
   goPage(first||'dash');
 }
 
 function buildNav(){
   var nav=document.getElementById('sbNav');
-  var items=NAVCONF[CU.role]||[];
+  if(!nav) return;
+  // Obter permissões do utilizador actual
+  var perms = getUserPerms(CU);
   var html='';
-  items.forEach(function(item){
-    var id=item[0],icon=item[1],lbl=item[2];
-    if(!id){
-      html+='<div class="nsec">'+lbl+'</div>';
-    } else {
-      html+='<div class="nitem" id="ni_'+id+'" data-page="'+id+'" onclick="navClick(this)">'+icon+' '+lbl+'</div>';
-    }
+  // Estado das secções (colapsadas ou expandidas)
+  if(!window._navState) window._navState={sec_ana:true,sec_op:false,sec_fin:false,sec_rep:false,sec_sys:false};
+
+  NAVCONF.forEach(function(sec){
+    var open = window._navState[sec.id] !== false;
+    // Filtrar páginas que o user tem acesso
+    var visPages = sec.pages.filter(function(p){ return perms.indexOf(p.perm||p.id) > -1; });
+    if(visPages.length===0) return;
+    html += '<div class="nav-sec" id="'+sec.id+'">';
+    html += '<div class="nav-sec-hdr" onclick="toggleNavSec(\'' + sec.id + '\')">';
+    html += '<span>'+sec.icon+' <span class="nav-sec-lbl">'+sec.sec+'</span></span>';
+    html += '<span class="nav-sec-arrow" id="arr_'+sec.id+'">'+(open?'&#9660;':'&#9654;')+'</span>';
+    html += '</div>';
+    html += '<div class="nav-sec-body" id="body_'+sec.id+'" style="display:'+(open?'block':'none')+';">';
+    visPages.forEach(function(p){
+      html += '<div class="nitem" id="ni_'+p.id+'" data-page="'+p.id+'" onclick="navClick(this)">'+p.icon+' '+p.lbl+'</div>';
+    });
+    html += '</div></div>';
   });
-  nav.innerHTML=html;
+  nav.innerHTML = html;
+}
+
+function toggleNavSec(secId){
+  if(!window._navState) window._navState={};
+  window._navState[secId] = !window._navState[secId];
+  var body = document.getElementById('body_'+secId);
+  var arr  = document.getElementById('arr_'+secId);
+  if(body) body.style.display = window._navState[secId] ? 'block' : 'none';
+  if(arr)  arr.innerHTML = window._navState[secId] ? '&#9660;' : '&#9654;';
+}
+
+// Retorna lista de permissões do utilizador
+function getUserPerms(u){
+  if(!u) return [];
+  // Se user tem perms customizadas usa-as, senão usa as do role
+  if(u.perms && u.perms.length > 0) return u.perms;
+  return ROLE_PERMS[u.role] || [];
+}
+
+// Verifica se utilizador tem acesso a uma página
+function canAccess(pageId){
+  return getUserPerms(CU).indexOf(pageId) > -1;
 }
 
 function navClick(el){
@@ -1034,7 +1330,9 @@ function goPage(id){
     dash:pgDash,vouchers:pgVouchers,batch:pgBatch,scan:pgScan,
     stampa:pgStampa,lista:pgLista,clienti:pgClienti,pdv:pgPdv,msgs:pgMsgs,
     users:pgUsers,reports:pgReports,finance:pgFinance,log:pgLog,settings:pgSettings,
-    order:pgOrder,myvouchers:pgMyVouchers,mycards:pgMyCards
+    order:pgOrder,myvouchers:pgMyVouchers,mycards:pgMyCards,
+    liquidazioni:pgLiquidazioni,findash:pgFindash,
+    rep_scadenza:pgRepScadenza,rep_storico:pgRepStorico
   };
   console.log('[goPage] funzione trovata: '+(fns[id]?'SI':'NO'));
   if(fns[id]){
@@ -1646,23 +1944,30 @@ function pgMsgs(el){
 // ══════════════════════════════════════════════════════
 function pgUsers(el){
   var us=getUsers();
-  var rl={admin:'ADMIN',attendant:'OPERATORE',company:'CLIENTE',employee:'DIPENDENTE'};
-  var rc={admin:'valid',attendant:'partial',company:'used',employee:'expired'};
+  var roleLabel={admin:'Admin',attendant:'Operatore',company:'Cliente',employee:'Dipendente'};
+  var roleColor={admin:'valid',attendant:'partial',company:'used',employee:'expired'};
   var rows=us.map(function(u){
-    return '<tr><td class="fw7">'+escH(u.name)+'</td>'
-      +'<td class="mono c-bl" style="font-size:11px;">'+escH(u.user)+'</td>'
-      +'<td><span class="badge '+(rc[u.role]||'expired')+'" style="font-size:9px;">'+(rl[u.role]||u.role)+'</span></td>'
-      +'<td style="font-size:11px;color:var(--gr)">'+(u.clienteId?clienteName(u.clienteId):'—')+'</td>'
-      +'<td><div class="flex" style="gap:3px;">'
-      +'<button class="btn btn-out btn-sm" data-uid="'+u.id+'" onclick="openUser(this.dataset.uid)">&#9999;</button>'
-      +'<button class="btn btn-red btn-sm" data-uid="'+u.id+'" onclick="deleteUser(this.dataset.uid)">&#128465;</button>'
-      +'</div></td></tr>';
+    var perms=getUserPerms(u);
+    var pdv=u.pdvId?getPdv().find(function(p){return p.id===u.pdvId;}):null;
+    return '<tr>'+
+      '<td><div class="fw7">'+escH(u.name)+'</div>'+
+        '<div class="mono c-bl" style="font-size:10px;">'+escH(u.user)+'</div></td>'+
+      '<td><span class="badge '+(roleColor[u.role]||'expired')+'" style="font-size:9px;">'+(roleLabel[u.role]||u.role)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--gr)">'+(u.clienteId?clienteName(u.clienteId):(pdv?escH(pdv.nome):'—'))+'</td>'+
+      '<td style="font-size:10px;color:var(--gr)">'+perms.length+' permessi</td>'+
+      '<td><div class="flex" style="gap:3px;">'+
+        '<button class="btn btn-out btn-sm" data-uid="'+u.id+'" onclick="openUser(this.dataset.uid)">&#9999;</button>'+
+        '<button class="btn btn-red btn-sm" data-uid="'+u.id+'" onclick="deleteUser(this.dataset.uid)">&#128465;</button>'+
+      '</div></td></tr>';
   }).join('');
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#128101;</div>'
-    +'<div class="ph-tx"><h2>Utenti</h2><p>Operatori, clienti e dipendenti del sistema</p></div>'
-    +'<div class="ph-ac"><button class="btn btn-bl" onclick="openUser()">+ Nuovo</button></div></div>'
-    +'<div class="card"><table><thead><tr><th>Nome</th><th>Username</th><th>Ruolo</th><th>Cliente</th><th>Azioni</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  el.innerHTML=
+    '<div class="ph"><div class="ph-ic">&#128101;</div>'+
+    '<div class="ph-tx"><h2>Utenti</h2><p>Operatori, clienti, dipendenti — permessi configurabili per utente</p></div>'+
+    '<div class="ph-ac"><button class="btn btn-bl" onclick="openUser()">+ Nuovo Utente</button></div></div>'+
+    '<div class="card"><table><thead><tr><th>Nome / Username</th><th>Tipo</th><th>Collegato a</th><th>Permessi</th><th>Azioni</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
 }
+
 
 // ══════════════════════════════════════════════════════
 // REGISTRO ATTIVITÀ
@@ -2879,8 +3184,40 @@ function genBatch(){
     vs.push(nv);_batchIds.push(nv.id);
   }
   setVouchers(vs);addLog('create','Lotto di '+cnt+' voucher — prefisso '+pfx);
+
+  // ── CRIAÇÃO AUTOMÁTICA DE ORDINE ──
+  var totale = cnt * amt;
+  var ordini = getOrdini();
+  var anoAtual = new Date().getFullYear();
+  // Número sequencial do ano
+  var numAnno = ordini.filter(function(o){
+    return o.numero && o.numero.indexOf('ORD-'+anoAtual+'-') === 0;
+  }).length + 1;
+  var numOrdine = 'ORD-' + anoAtual + '-' + ('000'+numAnno).slice(-3);
+  var cliente = getClienti().find(function(c){return c.id===clienteId;});
+  var nOrd = {
+    id: uid(),
+    numero: numOrdine,
+    data: today(),
+    clienteId: clienteId,
+    clienteNome: cliente ? (cliente.rag||cliente.nome) : '—',
+    voucherIds: _batchIds.slice(),
+    qtd: cnt,
+    valore: amt,
+    totale: totale,
+    nFattura: '',
+    dataFattura: '',
+    dataPagamento: '',
+    formaPagamento: '',
+    pagato: false,
+    note: ''
+  };
+  ordini.push(nOrd);
+  setOrdini(ordini);
+  addLog('create','Ordine '+numOrdine+' creato — €'+totale.toFixed(2)+' — '+cnt+' voucher');
+
   closeM('batchModal');
-  showToast(cnt+' voucher generati!','ok');
+  showToast(cnt+' voucher generati! Ordine '+numOrdine+' creato automaticamente.','ok');
   var br=document.getElementById('batchResult');
   if(br){
     br.innerHTML='<div class="sresult ok" style="margin-top:16px;">'
@@ -3083,10 +3420,56 @@ function openUser(id){
   document.getElementById('um_user').value=u?u.user:'';
   document.getElementById('um_pass').value='';
   document.getElementById('um_role').value=u?u.role:'attendant';
+  // PdV collegato
+  var pdvs=getPdv();
+  var pdvSel=document.getElementById('um_pdv');
+  if(pdvSel){
+    pdvSel.innerHTML='<option value="">— Nessun PdV —</option>'+pdvs.map(function(p){
+      return '<option value="'+p.id+'"'+(u&&u.pdvId===p.id?' selected':'')+'>'+escH(p.nome)+'</option>';
+    }).join('');
+  }
+  // Cliente collegato
   var cs=getClienti();
-  document.getElementById('um_comp').innerHTML='<option value="">— Nessuno —</option>'+cs.map(function(c){return'<option value="'+c.id+'"'+(u&&u.clienteId===c.id?' selected':'')+'>'+escH(c.nome)+'</option>';}).join('');
+  document.getElementById('um_comp').innerHTML='<option value="">— Nessuno —</option>'+cs.map(function(c){
+    return '<option value="'+c.id+'"'+(u&&u.clienteId===c.id?' selected':'')+'>'+escH(c.rag||c.nome)+'</option>';
+  }).join('');
+  // Permissões
+  var userPerms = (u&&u.perms) ? u.perms : ROLE_PERMS[u?u.role:'attendant']||[];
+  var allPerms=[
+    {id:'dash',lbl:'Dashboard & KPIs'},
+    {id:'vouchers',lbl:'Gestione Voucher'},
+    {id:'batch',lbl:'Emissione Lotto'},
+    {id:'lista',lbl:'Emissione da Lista'},
+    {id:'scan',lbl:'Valida Voucher'},
+    {id:'stampa',lbl:'Stampa / Ristampa'},
+    {id:'clienti',lbl:'Gestione Clienti'},
+    {id:'pdv',lbl:'Gestione Punti Vendita'},
+    {id:'msgs',lbl:'Messaggi Legali'},
+    {id:'users',lbl:'Gestione Utenti'},
+    {id:'finance',lbl:'Ordini & Pagamenti'},
+    {id:'liquidazioni',lbl:'Liquidazioni PdV'},
+    {id:'findash',lbl:'Dashboard Finanziario'},
+    {id:'reports',lbl:'Report Voucher'},
+    {id:'rep_scadenza',lbl:'Report In Scadenza'},
+    {id:'rep_storico',lbl:'Storico Utilizzi'},
+    {id:'log',lbl:'Registro Attività'},
+    {id:'settings',lbl:'Impostazioni Sistema'},
+    {id:'order',lbl:'Richiesta Voucher (cliente)'},
+    {id:'myvouchers',lbl:'I Miei Voucher (cliente)'},
+    {id:'mycards',lbl:'I Miei Voucher (dipendente)'}
+  ];
+  var permHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:6px;">';
+  allPerms.forEach(function(p){
+    var checked = userPerms.indexOf(p.id)>-1 ? 'checked' : '';
+    permHtml += '<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">'+
+      '<input type="checkbox" class="um_perm_cb" value="'+p.id+'" '+checked+' style="accent-color:#003DA5;width:13px;height:13px;">'+
+      escH(p.lbl)+'</label>';
+  });
+  permHtml += '</div>';
+  document.getElementById('um_perms_wrap').innerHTML = permHtml;
   openM('userModal');
 }
+
 
 function saveUser(){
   var name=document.getElementById('um_name').value.trim();
@@ -3094,14 +3477,28 @@ function saveUser(){
   var pass=document.getElementById('um_pass').value;
   var role=document.getElementById('um_role').value;
   var clienteId=document.getElementById('um_comp').value;
+  var pdvId=document.getElementById('um_pdv')?document.getElementById('um_pdv').value:'';
   if(!name||!user){showToast('Nome e username obbligatori','err');return;}
+  // Recolher permissões seleccionadas
+  var cbs=document.querySelectorAll('.um_perm_cb:checked');
+  var perms=[];
+  cbs.forEach(function(cb){perms.push(cb.value);});
   var us=getUsers();
   if(!_editUser&&us.find(function(u){return u.user===user;})){showToast('Username già esistente','err');return;}
   var existing=_editUser?us.find(function(u){return u.id===_editUser;}):null;
-  var obj={id:_editUser||uid(),name:name,user:user,pass:pass||(existing?existing.pass:'1234'),role:role,clienteId:clienteId};
+  var obj={
+    id:_editUser||uid(),
+    name:name,user:user,
+    pass:pass||(existing?existing.pass:'1234'),
+    role:role,
+    clienteId:clienteId,
+    pdvId:pdvId,
+    perms:perms
+  };
   if(_editUser){var idx=-1;for(var i=0;i<us.length;i++){if(us[i].id===_editUser){idx=i;break;}}if(idx>-1)us[idx]=obj;}else us.push(obj);
   setUsers(us);closeM('userModal');showToast('Utente salvato','ok');goPage('users');
 }
+
 
 function deleteUser(id){
   if(getUsers().filter(function(u){return u.role==='admin';}).length<=1&&getUsers().find(function(u){return u.id===id&&u.role==='admin';})){showToast("Non puoi eliminare l'unico amministratore",'err');return;}
@@ -3234,35 +3631,381 @@ function segnaOrdPagato(ordId, dataPag){
     .catch(function(e){console.warn('pag err',e);});
 }
 
-function pgFinance(el){
-  var tutti=_cache.ordini;
-  var totEmesso=tutti.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
-  var totPagato=tutti.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
-  var totDovuto=totEmesso-totPagato;
 
-  var clientiOpts='<option value="">Tutti i clienti</option>'
-    +_cache.clienti.map(function(c){return '<option value="'+c.id+'">'+escH(c.rag||c.nome)+'</option>';}).join('');
-
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#128178;</div>'
-    +'<div class="ph-tx"><h2>Finanziario</h2><p>Ordini, pagamenti e estratto conto</p></div></div>'
-    +'<div class="kpi-grid" style="margin-bottom:20px;">'
-    +'<div class="kpi-card"><div class="kpi-lbl">Totale Emesso</div><div class="kpi-val" style="color:#003DA5;">&#8364;'+totEmesso.toFixed(2)+'</div></div>'
-    +'<div class="kpi-card"><div class="kpi-lbl">Incassato</div><div class="kpi-val" style="color:#059669;">&#8364;'+totPagato.toFixed(2)+'</div></div>'
-    +'<div class="kpi-card"><div class="kpi-lbl">Da Incassare</div><div class="kpi-val" style="color:'+(totDovuto>0?'#D97706':'#059669')+';">&#8364;'+totDovuto.toFixed(2)+'</div></div>'
-    +'<div class="kpi-card"><div class="kpi-lbl">N&#176; Ordini</div><div class="kpi-val">'+tutti.length+'</div></div>'
-    +'</div>'
-    +'<div class="card" style="margin-bottom:16px;">'
-    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
-    +'<select id="fin_cl" onchange="renderFinTable()" style="flex:1;min-width:150px;padding:8px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;">'+clientiOpts+'</select>'
-    +'<select id="fin_st" onchange="renderFinTable()" style="padding:8px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;">'
-    +'<option value="">Tutti</option><option value="no">Da pagare</option><option value="si">Pagati</option>'
-    +'</select>'
-    +'<button class="btnsecondary" onclick="exportFinCSV()">&#8659; CSV</button>'
-    +'</div></div>'
-    +'<div class="card" id="finWrap"><p style="text-align:center;color:var(--gr);padding:20px;">Caricamento...</p></div>';
-
-  setTimeout(renderFinTable,100);
+// ══════════════════════════════════════════════════════
+// NOVAS PÁGINAS — serão implementadas nas fases seguintes
+// ══════════════════════════════════════════════════════
+function pgLiquidazioni(el){
+  el.innerHTML='<div class="ph"><div class="ph-ic">&#128260;</div>'+
+    '<div class="ph-tx"><h2>Liquidazioni PdV</h2><p>Controllo pagamenti tra sedi — in sviluppo (Fase 3)</p></div></div>'+
+    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
+    '&#128260; Modulo Liquidazioni PdV in sviluppo...<br><small>Sarà disponibile nella Fase 3</small></div>';
 }
+function pgFindash(el){
+  el.innerHTML='<div class="ph"><div class="ph-ic">&#128202;</div>'+
+    '<div class="ph-tx"><h2>Dashboard Finanziario</h2><p>KPIs e grafici — in sviluppo (Fase 5)</p></div></div>'+
+    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
+    '&#128202; Dashboard Finanziario in sviluppo...<br><small>Sarà disponibile nella Fase 5</small></div>';
+}
+function pgRepScadenza(el){
+  el.innerHTML='<div class="ph"><div class="ph-ic">&#9200;</div>'+
+    '<div class="ph-tx"><h2>Voucher in Scadenza</h2><p>Voucher in scadenza nei prossimi giorni — in sviluppo (Fase 4)</p></div></div>'+
+    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
+    '&#9200; Report In Scadenza in sviluppo...<br><small>Sarà disponibile nella Fase 4</small></div>';
+}
+function pgRepStorico(el){
+  el.innerHTML='<div class="ph"><div class="ph-ic">&#128203;</div>'+
+    '<div class="ph-tx"><h2>Storico Utilizzi</h2><p>Tutti i voucher utilizzati con data e operatore — in sviluppo (Fase 4)</p></div></div>'+
+    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
+    '&#128203; Storico Utilizzi in sviluppo...<br><small>Sarà disponibile nella Fase 4</small></div>';
+}
+
+
+// ══════════════════════════════════════════════════════
+// GERAÇÃO DE ORDINI RETROATIVOS
+// Detecta vouchers existentes sem ordine e cria-os
+// ══════════════════════════════════════════════════════
+function gerarOrdiniRetroativos(){
+  var vouchers = getVouchers();
+  var ordini   = getOrdini();
+
+  // Colectar IDs de vouchers já ligados a algum ordine
+  var jaLigados = {};
+  ordini.forEach(function(o){
+    (o.voucherIds||[]).forEach(function(vid){ jaLigados[vid]=true; });
+  });
+
+  // Filtrar vouchers sem ordine e com clienteId
+  var semOrdine = vouchers.filter(function(v){
+    return !jaLigados[v.id] && v.clienteId;
+  });
+
+  if(semOrdine.length === 0) return 0;
+
+  // Agrupar por clienteId + data de criação (dia)
+  var grupos = {};
+  semOrdine.forEach(function(v){
+    var key = (v.clienteId||'') + '|' + (v.created||'').substring(0,10);
+    if(!grupos[key]) grupos[key] = [];
+    grupos[key].push(v);
+  });
+
+  var criados = 0;
+  var anoAtual = new Date().getFullYear();
+
+  Object.keys(grupos).sort().forEach(function(key){
+    var grupo = grupos[key];
+    var v0    = grupo[0];
+    var clienteId = v0.clienteId;
+    var cliente   = getClienti().find(function(c){return c.id===clienteId;});
+    var data      = (v0.created||'').substring(0,10) || today();
+
+    // Número sequencial único
+    var numAnno = ordini.filter(function(o){
+      return o.numero && o.numero.indexOf('ORD-'+data.substring(0,4)+'-')===0;
+    }).length + criados + 1;
+    var numOrdine = 'ORD-' + data.substring(0,4) + '-' + ('000'+numAnno).slice(-3);
+
+    // Calcular totais — pode ter valores diferentes no mesmo lote
+    var qtd    = grupo.length;
+    var totale = grupo.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
+    // Valor unitário mais comum
+    var valore = grupo[0].amt || 0;
+
+    var novoOrd = {
+      id:            uid(),
+      numero:        numOrdine,
+      data:          data,
+      clienteId:     clienteId,
+      clienteNome:   cliente ? (cliente.rag||cliente.nome) : '—',
+      voucherIds:    grupo.map(function(v){return v.id;}),
+      qtd:           qtd,
+      valore:        valore,
+      totale:        totale,
+      nFattura:      '',
+      dataFattura:   '',
+      dataPagamento: '',
+      formaPagamento:'',
+      pagato:        false,
+      note:          'Ordine retroativo criado automaticamente'
+    };
+
+    ordini.push(novoOrd);
+    criados++;
+  });
+
+  if(criados > 0){
+    setOrdini(ordini);
+    addLog('create', criados + ' ordini retroativi creati automaticamente');
+  }
+  return criados;
+}
+
+function pgFinance(el){
+  _pgFinanceEl = el; // guardar referência para rerender nos filtros
+  renderFinFull();
+}
+
+var _pgFinanceEl = null;
+
+function renderFinFull(){
+  var el = _pgFinanceEl;
+  if(!el) return;
+
+  var todosOrdini = getOrdini();
+
+  // Ler filtros actuais (se existirem)
+  var cl = (document.getElementById('fin_cl')||{}).value||'';
+  var st = (document.getElementById('fin_st')||{}).value||'';
+  var yr = (document.getElementById('fin_yr')||{}).value||'';
+
+  // KPIs — sempre com TODOS os ordini
+  var totEmesso  = todosOrdini.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totPagato  = todosOrdini.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totDovuto  = totEmesso - totPagato;
+  var nPagati    = todosOrdini.filter(function(o){return o.pagato;}).length;
+  var nDaPagare  = todosOrdini.filter(function(o){return !o.pagato;}).length;
+
+  // Filtrar ordini para a tabela
+  var all = todosOrdini.slice();
+  if(cl) all = all.filter(function(o){return o.clienteId===cl;});
+  if(st==='si') all = all.filter(function(o){return o.pagato;});
+  if(st==='no') all = all.filter(function(o){return !o.pagato;});
+  if(yr) all = all.filter(function(o){return (o.data||'').indexOf(yr)===0;});
+  all.sort(function(a,b){return (b.data||'').localeCompare(a.data||'');});
+
+  // Opções dos selects
+  var clientiOpts = '<option value="">Tutti i clienti</option>'
+    + getClienti().map(function(c){
+        var sel = (cl===c.id)?' selected':'';
+        return '<option value="'+c.id+'"'+sel+'>'+escH(c.rag||c.nome)+'</option>';
+      }).join('');
+
+  var years=[]; todosOrdini.forEach(function(o){var y=(o.data||'').substring(0,4);if(y&&years.indexOf(y)===-1)years.push(y);});
+  years.sort().reverse();
+  var yearOpts = '<option value="">Tutti gli anni</option>'
+    + years.map(function(y){return '<option value="'+y+'"'+(yr===y?' selected':'')+'>'+y+'</option>';}).join('');
+
+  // Construir tabela
+  var tableHTML = '';
+  if(all.length===0){
+    tableHTML = '<div style="padding:40px;text-align:center;color:var(--gr);">'
+      +'<div style="font-size:40px;margin-bottom:12px;">&#128178;</div>'
+      +'<div style="font-size:14px;font-weight:600;margin-bottom:6px;">Nessun ordine trovato</div>'
+      +'<div style="font-size:12px;">Gli ordini vengono creati automaticamente all\'emissione di un lotto.</div>'
+      +'</div>';
+  } else {
+    var totFilt     = all.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+    var totFiltPago = all.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+
+    var rows = all.map(function(o){
+      var pago    = o.pagato;
+      var badge   = pago
+        ? '<span class="badge valid">&#128994; Pagato</span>'
+        : '<span class="badge partial">&#128308; Da pagare</span>';
+      var fattura = o.nFattura
+        ? '<span class="mono" style="font-size:11px;color:#003DA5;">'+escH(o.nFattura)+'</span>'
+        : '<span style="color:var(--glt);font-size:11px;">— nessuna —</span>';
+      var pagInfo = (pago && o.dataPagamento)
+        ? '<div style="font-size:10px;color:var(--gr);">'+escH(o.formaPagamento||'')+(o.dataPagamento?' · '+fmtDate(o.dataPagamento):'')+'</div>'
+        : '';
+      return '<tr>'
+        +'<td><div class="fw7 mono" style="font-size:12px;color:#003DA5;">'+escH(o.numero||'—')+'</div>'
+          +'<div style="font-size:10px;color:var(--gr);">'+fmtDate(o.data)+'</div></td>'
+        +'<td><div class="fw7">'+escH(o.clienteNome||'—')+'</div></td>'
+        +'<td style="text-align:center;"><div style="font-size:13px;font-weight:700;">'+o.qtd+'</div>'
+          +'<div style="font-size:10px;color:var(--gr);">x &#8364;'+parseFloat(o.valore||0).toFixed(2)+'</div></td>'
+        +'<td style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#003DA5;">&#8364;'+parseFloat(o.totale||0).toFixed(2)+'</div></td>'
+        +'<td>'+fattura+'</td>'
+        +'<td>'+badge+pagInfo+'</td>'
+        +'<td><button class="btn btn-out btn-sm" data-oid="'+o.id+'" onclick="openOrdineModal(this.dataset.oid)">&#9999; Gestisci</button></td>'
+        +'</tr>';
+    }).join('');
+
+    tableHTML = '<div style="overflow-x:auto;">'
+      +'<table><thead><tr>'
+        +'<th>Ordine / Data</th><th>Cliente</th><th style="text-align:center;">Qtd.</th>'
+        +'<th style="text-align:right;">Totale</th><th>N&#176; Fattura</th><th>Stato</th><th>Azioni</th>'
+      +'</tr></thead><tbody>'+rows+'</tbody>'
+      +'<tfoot><tr style="background:var(--gpl);">'
+        +'<td colspan="3" style="font-size:11px;color:var(--gr);padding:10px 12px;">'+all.length+' ordini</td>'
+        +'<td style="text-align:right;font-weight:800;font-size:14px;padding:10px 12px;">&#8364;'+totFilt.toFixed(2)+'</td>'
+        +'<td colspan="2" style="font-size:11px;color:#059669;padding:10px 12px;font-weight:600;">Pagato: &#8364;'+totFiltPago.toFixed(2)+' &nbsp;|&nbsp; Da incassare: &#8364;'+(totFilt-totFiltPago).toFixed(2)+'</td>'
+        +'<td></td>'
+      +'</tr></tfoot>'
+      +'</table></div>';
+  }
+
+  // Montar página completa de uma vez
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#128178;</div>'
+    +'<div class="ph-tx"><h2>Ordini & Pagamenti</h2><p>Gestione fatture, incassi e estratto conto clienti</p></div></div>'
+
+    // KPIs
+    +'<div class="sgrid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px;">'
+      +'<div class="scard bl"><div class="sl">Totale Emesso</div><div class="sv">&#8364;'+totEmesso.toFixed(2)+'</div><div class="ss">tutti gli ordini</div></div>'
+      +'<div class="scard" style="border-left:3px solid #059669;"><div class="sl">Incassato</div><div class="sv" style="color:#059669;">&#8364;'+totPagato.toFixed(2)+'</div><div class="ss">'+nPagati+' pagati</div></div>'
+      +'<div class="scard" style="border-left:3px solid '+(totDovuto>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">Da Incassare</div>'
+        +'<div class="sv" style="color:'+(totDovuto>0?'#D97706':'#059669')+';">&#8364;'+totDovuto.toFixed(2)+'</div>'
+        +'<div class="ss">'+nDaPagare+' aperti</div></div>'
+      +'<div class="scard"><div class="sl">N&#176; Ordini</div><div class="sv">'+todosOrdini.length+'</div><div class="ss">totale</div></div>'
+      +'<div class="scard"><div class="sl">% Incassato</div><div class="sv">'+(totEmesso>0?Math.round(totPagato/totEmesso*100):0)+'%</div><div class="ss">sul totale</div></div>'
+    +'</div>'
+
+    // Filtros
+    +'<div class="card" style="margin-bottom:14px;">'
+      +'<div style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
+        +'<select id="fin_cl" onchange="renderFinFull()" style="flex:1;min-width:150px;padding:8px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;">'+clientiOpts+'</select>'
+        +'<select id="fin_st" onchange="renderFinFull()" style="padding:8px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;">'
+          +'<option value=""'+(st===''?' selected':'')+'>Tutti gli stati</option>'
+          +'<option value="no"'+(st==='no'?' selected':'')+'>&#128308; Da pagare</option>'
+          +'<option value="si"'+(st==='si'?' selected':'')+'>&#128994; Pagati</option>'
+        +'</select>'
+        +'<select id="fin_yr" onchange="renderFinFull()" style="padding:8px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;">'+yearOpts+'</select>'
+        +'<button class="btn btn-out" onclick="exportFinCSV()">&#8659; CSV</button>'
+      +'</div>'
+    +'</div>'
+
+    // Tabela — já incluída directamente
+    +'<div class="card">'+tableHTML+'</div>';
+}
+
+// renderFinTable mantida por compatibilidade — aponta para renderFinFull
+function renderFinTable(){ renderFinFull(); }
+
+
+
+function renderFinTable(){
+  var cl  = (document.getElementById("fin_cl")||{}).value||"";
+  var st  = (document.getElementById("fin_st")||{}).value||"";
+  var yr  = (document.getElementById("fin_yr")||{}).value||"";
+  var all = getOrdini();
+
+  if(cl) all = all.filter(function(o){return o.clienteId===cl;});
+  if(st==="si") all = all.filter(function(o){return o.pagato;});
+  if(st==="no") all = all.filter(function(o){return !o.pagato;});
+  if(yr) all = all.filter(function(o){return (o.data||"").indexOf(yr)===0;});
+
+  // Ordenar: mais recentes primeiro
+  all.sort(function(a,b){return (b.data||"").localeCompare(a.data||"");});
+
+  var wrap = document.getElementById("finTableWrap");
+  if(!wrap) return;
+
+  if(all.length===0){
+    wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gr);">'+
+      '&#128178; Nessun ordine trovato.<br><small>Gli ordini vengono creati automaticamente all\'emissione di un lotto.</small></div>';
+    return;
+  }
+
+  var rows = all.map(function(o){
+    var pago = o.pagato;
+    var badge = pago
+      ? '<span class="badge valid">&#128994; Pagato</span>'
+      : '<span class="badge partial">&#128308; Da pagare</span>';
+    var fattura = o.nFattura
+      ? '<span class="mono" style="font-size:11px;color:#003DA5;">'+escH(o.nFattura)+'</span>'
+      : '<span style="color:var(--glt);font-size:11px;">— nessuna —</span>';
+    var pagInfo = pago && o.dataPagamento
+      ? '<div style="font-size:10px;color:var(--gr);">'+escH(o.formaPagamento||'')+(o.dataPagamento?' · '+fmtDate(o.dataPagamento):'')+'</div>'
+      : '';
+    return '<tr>'+
+      '<td><div class="fw7 mono" style="font-size:12px;color:#003DA5;">'+escH(o.numero||'—')+'</div>'+
+        '<div style="font-size:10px;color:var(--gr);">'+fmtDate(o.data)+'</div></td>'+
+      '<td><div class="fw7">'+escH(o.clienteNome||'—')+'</div></td>'+
+      '<td style="text-align:center;"><div style="font-size:13px;font-weight:700;">'+o.qtd+'</div>'+
+        '<div style="font-size:10px;color:var(--gr);">× &#8364;'+parseFloat(o.valore||0).toFixed(2)+'</div></td>'+
+      '<td style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#003DA5;">&#8364;'+parseFloat(o.totale||0).toFixed(2)+'</div></td>'+
+      '<td>'+fattura+'</td>'+
+      '<td>'+badge+pagInfo+'</td>'+
+      '<td><button class="btn btn-out btn-sm" data-oid="'+o.id+'" onclick="openOrdineModal(this.dataset.oid)">&#9999; Gestisci</button></td>'+
+    '</tr>';
+  }).join('');
+
+  // Totale filtrado
+  var totFilt = all.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totFiltPago = all.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+
+  wrap.innerHTML =
+    '<div style="overflow-x:auto;">'+
+    '<table><thead><tr>'+
+      '<th>Ordine / Data</th><th>Cliente</th><th style="text-align:center;">Qtd.</th>'+
+      '<th style="text-align:right;">Totale</th><th>N&#176; Fattura</th><th>Stato</th><th>Azioni</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody>'+
+    '<tfoot><tr style="background:var(--gpl);">'+
+      '<td colspan="3" style="font-size:11px;color:var(--gr);padding:10px 12px;">'+all.length+' ordini filtrati</td>'+
+      '<td style="text-align:right;font-weight:800;font-size:14px;padding:10px 12px;">&#8364;'+totFilt.toFixed(2)+'</td>'+
+      '<td colspan="2" style="font-size:11px;color:#059669;padding:10px 12px;font-weight:600;">Pagato: &#8364;'+totFiltPago.toFixed(2)+' · Da incassare: &#8364;'+(totFilt-totFiltPago).toFixed(2)+'</td>'+
+      '<td></td>'+
+    '</tr></tfoot>'+
+    '</table></div>';
+}
+
+function openOrdineModal(id){
+  var o = getOrdini().find(function(x){return x.id===id;});
+  if(!o) return;
+  _editOrdine = id;
+  // Preencher modal
+  document.getElementById("om_numero").textContent  = o.numero||"—";
+  document.getElementById("om_cliente").textContent = o.clienteNome||"—";
+  document.getElementById("om_data").textContent    = fmtDate(o.data);
+  document.getElementById("om_totale").textContent  = "€"+parseFloat(o.totale||0).toFixed(2);
+  document.getElementById("om_qtd").textContent     = o.qtd+" voucher × €"+parseFloat(o.valore||0).toFixed(2);
+  document.getElementById("om_nfattura").value      = o.nFattura||"";
+  document.getElementById("om_dfattura").value      = o.dataFattura||"";
+  document.getElementById("om_dpagamento").value    = o.dataPagamento||"";
+  document.getElementById("om_fpagamento").value    = o.formaPagamento||"bonifico";
+  document.getElementById("om_pagato").checked      = o.pagato||false;
+  document.getElementById("om_note").value          = o.note||"";
+  // Lista de vouchers do ordine
+  var vs = getVouchers().filter(function(v){return (o.voucherIds||[]).indexOf(v.id)>-1;});
+  var vHtml = vs.length>0
+    ? vs.map(function(v){
+        var st=vSt(v);
+        var badge=st==="used"?"<span class=\"badge used\">Usato</span>":st==="expired"?"<span class=\"badge expired\">Scaduto</span>":"<span class=\"badge valid\">Valido</span>";
+        return "<div style=\"display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--gbd);font-size:12px;\">"+
+          "<span class=\"mono fw7\" style=\"font-size:11px;\">"+escH(v.id)+"</span>"+
+          badge+"<span>€"+parseFloat(v.amt||0).toFixed(2)+"</span></div>";
+      }).join("")
+    : "<div style=\"font-size:12px;color:var(--gr);padding:8px 0;\">Nessun voucher collegato</div>";
+  document.getElementById("om_vouchers_list").innerHTML = vHtml;
+  openM("ordineModal");
+}
+
+function saveOrdine(){
+  if(!_editOrdine) return;
+  var ordini = getOrdini();
+  var idx = -1;
+  for(var i=0;i<ordini.length;i++){if(ordini[i].id===_editOrdine){idx=i;break;}}
+  if(idx===-1) return;
+  ordini[idx].nFattura       = document.getElementById("om_nfattura").value.trim();
+  ordini[idx].dataFattura    = document.getElementById("om_dfattura").value;
+  ordini[idx].dataPagamento  = document.getElementById("om_dpagamento").value;
+  ordini[idx].formaPagamento = document.getElementById("om_fpagamento").value;
+  ordini[idx].pagato         = document.getElementById("om_pagato").checked;
+  ordini[idx].note           = document.getElementById("om_note").value.trim();
+  setOrdini(ordini);
+  closeM("ordineModal");
+  showToast("Ordine "+ordini[idx].numero+" aggiornato","ok");
+  addLog("edit","Ordine "+ordini[idx].numero+" aggiornato — pagato: "+(ordini[idx].pagato?"Sì":"No"));
+  goPage("finance");
+}
+
+function exportFinCSV(){
+  var all = getOrdini();
+  var rows = [["Numero","Data","Cliente","Qtd","Valore Unit.","Totale","N.Fattura","Data Fattura","Data Pagamento","Forma Pagamento","Stato"]];
+  all.forEach(function(o){
+    rows.push([o.numero||"",o.data||"",o.clienteNome||"",o.qtd||0,parseFloat(o.valore||0).toFixed(2),parseFloat(o.totale||0).toFixed(2),o.nFattura||"",o.dataFattura||"",o.dataPagamento||"",o.formaPagamento||"",o.pagato?"Pagato":"Da pagare"]);
+  });
+  var csv = rows.map(function(r){return r.join(";");}).join("\n");
+  var a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+  a.download="ordini_fuelpass_"+today()+".csv";
+  a.click();
+}
+
+
 
 function renderFinTable(){
   var wrap=document.getElementById('finWrap');
