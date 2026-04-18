@@ -783,6 +783,55 @@ tr:hover td{background:rgba(0,61,165,.02);}
   </div>
 </div>
 </div>
+<!-- ══ MODAL LIQUIDAZIONE PdV ══ -->
+<div class="moverlay" id="liqModal">
+<div class="modal modal-sm">
+  <h3>&#128176; Registra Liquidazione</h3>
+
+  <!-- Info PdV -->
+  <div style="background:var(--blue-lt);border:1px solid rgba(0,61,165,.15);border-radius:9px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div style="font-size:9px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;">Punto di Vendita</div>
+      <div id="lm_pdv" style="font-size:15px;font-weight:800;"></div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.08em;">Saldo Da Liquidare</div>
+      <div id="lm_saldo" style="font-size:20px;font-weight:900;color:#D97706;"></div>
+    </div>
+  </div>
+
+  <div class="mgrid">
+    <div class="fld">
+      <label>Valore da Pagare (€) *</label>
+      <input id="lm_valor" type="number" step="0.01" min="0.01" placeholder="0.00"/>
+    </div>
+    <div class="fld">
+      <label>Data Pagamento *</label>
+      <input id="lm_data" type="date"/>
+    </div>
+    <div class="fld gc2">
+      <label>Metodo di Pagamento</label>
+      <select id="lm_metodo">
+        <option value="bonifico">Bonifico Bancario</option>
+        <option value="contanti">Contanti</option>
+        <option value="assegno">Assegno</option>
+        <option value="altro">Altro</option>
+      </select>
+    </div>
+    <div class="fld gc2">
+      <label>Note</label>
+      <input id="lm_note" type="text" placeholder="es: Pagamento Aprile 2026"/>
+    </div>
+  </div>
+
+  <div class="mactions">
+    <button class="btn btn-out" onclick="closeM('liqModal')">Annulla</button>
+    <button class="btn btn-bl" onclick="saveLiquidazione()">&#10003; Registra Pagamento</button>
+  </div>
+</div>
+</div>
+
+
 
 
 
@@ -797,7 +846,7 @@ tr:hover td{background:rgba(0,61,165,.02);}
 // ══════════════════════════════════════════════════════
 var _SB_URL = 'https://ycaismhhnunrzdllaswq.supabase.co';
 var _SB_KEY = 'sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc';
-var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[]};
+var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[],liquidazioni:[]};
 var _bm2Action = null;
 var _cacheLoaded = false;
 
@@ -931,7 +980,7 @@ function loadAllData(callback){
 // ══════════════════════════════════════════════════════
 // STATO GLOBALE
 // ══════════════════════════════════════════════════════
-var CU=null, _scanId=null, _editUser=null, _editCliente=null, _editPdv=null, _editOrdine=null;
+var CU=null, _scanId=null, _editUser=null, _editCliente=null, _editPdv=null, _editOrdine=null, _liqPdvId=null, _liqPdvNome='';
 var _editMsg=null, _editVoucher=null, _clLogo=null, _pdvLogo=null;
 var _qrV=null, _batchIds=[], _editStazione=null, _stLogo=null;
 var _SECRET='ENL2025-DOLOMITE-VCR';
@@ -945,6 +994,11 @@ function dbSet(k,v){_cache[k]=v;}
 function getVouchers(){return _cache.vouchers.slice();}
 function getUsers(){return _cache.users.slice();}
 function getOrdini(){return (_cache.ordini||[]).slice();}
+function getLiquidazioni(){return (_cache.liquidazioni||[]).slice();}
+function setLiquidazioni(arr){
+  _cache.liquidazioni = arr.slice();
+  sbUpsert('liquidazioni', arr).catch(function(e){console.warn('sync liq',e);});
+}
 function setOrdini(arr){
   _cache.ordini = arr.slice();
   // Guardar no Supabase — mapear para colunas da tabela
@@ -1409,105 +1463,266 @@ function vpHTML(v){
 // DASHBOARD
 // ══════════════════════════════════════════════════════
 function pgDash(el){
-  var vs=getVouchers();
-  var valid=0,partial=0,used=0,bal=0,expiring=0,todayUsed=0;
-  var t7=new Date();t7.setDate(t7.getDate()+7);var t7s=t7.toISOString().split('T')[0];
+  var vs      = getVouchers();
+  var ordini  = getOrdini();
+  var liqs    = getLiquidazioni();
+  var cs      = getClienti();
+  var pdvs    = getPdv();
+
+  // ── Calcular métricas
+  var oggi = today();
+  var t7  = new Date(); t7.setDate(t7.getDate()+7);   var t7s  = t7.toISOString().split('T')[0];
+  var t30 = new Date(); t30.setDate(t30.getDate()+30); var t30s = t30.toISOString().split('T')[0];
+
+  var valid=0, partial=0, used=0, expired=0, bal=0;
+  var expiring7=[], expiring30=[], scadutiNonUsati=[];
+  var todayTx=0, todayAmt=0;
+
   vs.forEach(function(v){
-    var s=vSt(v);
-    if(s==='valid'){valid++;bal+=v.bal;}
-    if(s==='partial'){partial++;bal+=v.bal;}
-    if(s==='used')used++;
-    if((s==='valid'||s==='partial')&&v.exp>=today()&&v.exp<=t7s)expiring++;
-    if(v.tx&&v.tx.some(function(t){return t.date===today();}))todayUsed++;
-  });
-  var ss=getStazioni();var ps=getPdv();
-  var setupNeeded=(ss.length===0||ps.length===0||vs.length===0);
-
-  // HEADER
-  var hd=document.createElement('div');hd.className='ph';
-  hd.innerHTML='<div class="ph-ic">&#128202;</div>'
-    +'<div class="ph-tx"><h2>Dashboard</h2><p>Benvenuto in FuelPass &mdash; '+today_it()+'</p></div>'
-    +'<div class="ph-ac">'
-    +'<button class="btn btn-bl" onclick="openCV()">&#43; Nuovo Voucher</button>&nbsp;'
-    +'<button class="btn btn-out" onclick="openBatch()">&#9889; Lotto</button>'
-    +'</div>';
-  el.appendChild(hd);
-
-  // SETUP WIZARD
-  if(setupNeeded){
-    var sw=document.createElement('div');
-    sw.style.cssText='background:#003DA5;border-radius:12px;padding:20px 24px;margin-bottom:20px;color:#fff;';
-    sw.innerHTML='<div style="font-size:15px;font-weight:700;margin-bottom:5px;">&#127775; Benvenuto in FuelPass</div>'
-      +'<div style="font-size:12px;opacity:.8;margin-bottom:14px;">Completa la configurazione iniziale per iniziare a emettere voucher.</div>';
-    var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:9px;flex-wrap:wrap;';
-    if(ss.length===0){
-      var b1=document.createElement('button');b1.className='btn';
-      b1.style.cssText='background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.4);';
-      b1.innerHTML='&#10102; Configura Stazione';b1.onclick=function(){goPage('settings');};btnRow.appendChild(b1);
-    } else {btnRow.innerHTML+='<span style="font-size:11px;opacity:.7;">&#9989; Stazione configurata</span>';}
-    if(ps.length===0){
-      var b2=document.createElement('button');b2.className='btn';
-      b2.style.cssText='background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.4);';
-      b2.innerHTML='&#10103; Aggiungi Punti Vendita';b2.onclick=function(){goPage('pdv');};btnRow.appendChild(b2);
-    } else {btnRow.innerHTML+='<span style="font-size:11px;opacity:.7;">&#9989; Punti vendita configurati</span>';}
-    if(vs.length===0){
-      var b3=document.createElement('button');b3.className='btn';
-      b3.style.cssText='background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.4);';
-      b3.innerHTML='&#10104; Emetti il Primo Voucher';b3.onclick=function(){openCV();};btnRow.appendChild(b3);
-    } else {btnRow.innerHTML+='<span style="font-size:11px;opacity:.7;">&#9989; Voucher emessi</span>';}
-    sw.appendChild(btnRow);el.appendChild(sw);
-  }
-
-  // AZIONI RAPIDE
-  var qa=document.createElement('div');
-  qa.style.cssText='background:#fff;border:1px solid var(--gbd);border-radius:10px;padding:14px 18px;margin-bottom:18px;';
-  qa.innerHTML='<div style="font-size:10px;font-weight:700;color:var(--gr);letter-spacing:.08em;text-transform:uppercase;margin-bottom:11px;">Azioni Rapide</div>';
-  var qaBtns=document.createElement('div');qaBtns.style.cssText='display:flex;gap:8px;flex-wrap:wrap;';
-  [['btn btn-bl','openCV()','&#43; Nuovo Voucher'],
-   ['btn btn-out','openBatch()','&#9889; Emetti Lotto'],
-   ['btn btn-out','goPage("scan")','&#128269; Valida Voucher'],
-   ['btn btn-out','goPage("stampa")','&#128424; Stampa / Ristampa'],
-   ['btn btn-out','goPage("reports")','&#128200; Report']
-  ].forEach(function(d){
-    var b=document.createElement('button');b.className=d[0];
-    b.setAttribute('onclick',d[1]);b.innerHTML=d[2];qaBtns.appendChild(b);
-  });
-  qa.appendChild(qaBtns);el.appendChild(qa);
-
-  // KPIs
-  var kpi=document.createElement('div');kpi.className='sgrid';
-  kpi.innerHTML='<div class="scard bl"><div class="sl">Voucher Attivi</div><div class="sv">'+(valid+partial)+'</div><div class="ss">'+valid+' validi &bull; '+partial+' parziali</div></div>'
-    +'<div class="scard"><div class="sl">Saldo in Circolazione</div><div class="sv">&#8364;'+bal.toFixed(0)+'</div><div class="ss">valore residuo totale</div></div>'
-    +'<div class="scard"><div class="sl">Utilizzati Oggi</div><div class="sv">'+todayUsed+'</div><div class="ss">transazioni del giorno</div></div>'
-    +'<div class="scard"><div class="sl">In Scadenza</div><div class="sv" style="color:'+(expiring>0?'var(--rd)':'inherit')+'">'+expiring+'</div><div class="ss">entro 7 giorni</div></div>';
-  el.appendChild(kpi);
-
-  // ULTIMI VOUCHER
-  var lastRows='';
-  vs.slice(-6).reverse().forEach(function(v){lastRows+=vRowShort(v);});
-  var ulCard=document.createElement('div');ulCard.className='card';
-  ulCard.innerHTML='<div class="card-hd"><h3>Ultimi Voucher Emessi</h3>'
-    +'<button class="btn btn-out btn-sm" onclick="goPage(\'vouchers\')">Vedi tutti &#8594;</button></div>'
-    +'<table><thead><tr><th>Codice</th><th>Intestatario</th><th>Importo</th><th>Saldo</th><th>Stato</th><th>Scadenza</th><th></th></tr></thead>'
-    +'<tbody>'+(lastRows||'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher emesso</td></tr>')+'</tbody></table>';
-  el.appendChild(ulCard);
-
-  // VOUCHER IN SCADENZA
-  var expVs=vs.filter(function(v){var s=vSt(v);return(s==='valid'||s==='partial')&&v.exp>=today()&&v.exp<=t7s;});
-  if(expVs.length){
-    var expCard=document.createElement('div');expCard.className='card';expCard.style.cssText='margin-top:14px;border-color:var(--ambd);';
-    var expRows='';
-    expVs.forEach(function(v){
-      expRows+='<tr><td class="mono c-bl fw7">'+v.id+'</td><td>'+escH(v.name)+'</td>'
-        +'<td class="fw7 c-bl">&#8364;'+v.bal.toFixed(2)+'</td>'
-        +'<td style="color:var(--rd);font-weight:600;">'+fmtDate(v.exp)+'</td>'
-        +'<td><button class="btn btn-out btn-sm" data-vid="'+v.id+'" onclick="showQR(this.dataset.vid)">QR</button></td></tr>';
+    var st = vSt(v);
+    if(st==='valid')   { valid++;   bal+=v.bal; }
+    if(st==='partial') { partial++; bal+=v.bal; }
+    if(st==='used')    { used++; }
+    if(st==='expired') { expired++; }
+    if((st==='valid'||st==='partial') && v.exp>=oggi && v.exp<=t7s)  expiring7.push(v);
+    if((st==='valid'||st==='partial') && v.exp>=oggi && v.exp<=t30s && v.exp>t7s) expiring30.push(v);
+    if(st==='expired' && v.bal>0) scadutiNonUsati.push(v);
+    if(v.tx) v.tx.forEach(function(t){
+      if(t.date===oggi){ todayTx++; todayAmt+=parseFloat(t.amt||0); }
     });
-    expCard.innerHTML='<div class="card-hd" style="background:var(--ambg);"><h3 style="color:var(--am);">&#9888; In Scadenza nei Prossimi 7 Giorni ('+expVs.length+')</h3></div>'
-      +'<table><thead><tr><th>Codice</th><th>Intestatario</th><th>Saldo</th><th>Scade il</th><th></th></tr></thead><tbody>'+expRows+'</tbody></table>';
-    el.appendChild(expCard);
+  });
+
+  // Métricas financeiras
+  var totEmesso  = ordini.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totPagato  = ordini.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totDovuto  = totEmesso - totPagato;
+  var ordAperti  = ordini.filter(function(o){return !o.pagato;});
+
+  // Métricas PdV — liquidazioni pendentes
+  var pdvSaldos = pdvs.map(function(p){
+    var txPdv = 0;
+    vs.forEach(function(v){
+      (v.tx||[]).forEach(function(t){if(t.pdvId===p.id) txPdv+=parseFloat(t.amt||0);});
+      if(v.usedPdvId===p.id && (!v.tx||!v.tx.length)) txPdv+=parseFloat(v.amt||0);
+    });
+    var liqPdv = liqs.filter(function(l){return l.pdvId===p.id;}).reduce(function(s,l){return s+parseFloat(l.valor||0);},0);
+    return {p:p, saldo:txPdv-liqPdv};
+  }).filter(function(x){return x.saldo>0.005;});
+
+  // Alertas — lista ordenada por urgência
+  var alertas = [];
+  if(expiring7.length)    alertas.push({level:'red',  icon:'&#9200;', msg:expiring7.length+' voucher scadono entro 7 giorni',       action:"goPage('rep_scadenza')", lbl:'Vedi'});
+  if(scadutiNonUsati.length) alertas.push({level:'red', icon:'&#10060;', msg:scadutiNonUsati.length+' voucher scaduti con saldo residuo', action:"goPage('rep_scadenza')", lbl:'Vedi'});
+  if(totDovuto>0)         alertas.push({level:'amber',icon:'&#128178;', msg:'\u20ac'+totDovuto.toFixed(2)+' da incassare da '+ordAperti.length+' ordini aperti', action:"goPage('finance')", lbl:'Gestisci'});
+  if(pdvSaldos.length)    alertas.push({level:'amber',icon:'&#128260;', msg:pdvSaldos.length+' PdV con liquidazioni in sospeso',      action:"goPage('liquidazioni')", lbl:'Liquida'});
+  if(expiring30.length)   alertas.push({level:'blue', icon:'&#128337;', msg:expiring30.length+' voucher scadono entro 30 giorni',      action:"goPage('rep_scadenza')", lbl:'Vedi'});
+
+  // Evolução últimos 6 meses
+  var mesi = [];
+  for(var m=5;m>=0;m--){
+    var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-m);
+    var ym = d.toISOString().substring(0,7);
+    var nome = d.toLocaleString('it-IT',{month:'short',year:'2-digit'});
+    var emesso = 0, usato = 0;
+    vs.forEach(function(v){
+      if((v.created||'').startsWith(ym)) emesso += parseFloat(v.amt||0);
+      (v.tx||[]).forEach(function(t){if((t.date||'').startsWith(ym)) usato+=parseFloat(t.amt||0);});
+    });
+    mesi.push({nome:nome, emesso:emesso, usato:usato});
   }
+  var maxVal = Math.max(1, Math.max.apply(null, mesi.map(function(m){return Math.max(m.emesso,m.usato);})));
+
+  // ── RENDER
+  var alertasHTML = alertas.length===0
+    ? '<div style="padding:12px 16px;font-size:12px;color:#059669;display:flex;align-items:center;gap:8px;">&#127881; Tutto in ordine — nessun avviso attivo</div>'
+    : alertas.map(function(a){
+        var bg={red:'#FEF2F2',amber:'#FFFBEB',blue:'#EBF1FB'};
+        var co={red:'#DC2626',amber:'#D97706',blue:'#003DA5'};
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--gbd);background:'+bg[a.level]+';">'
+          +'<span style="font-size:16px;">'+a.icon+'</span>'
+          +'<span style="flex:1;font-size:12px;color:'+co[a.level]+';font-weight:600;">'+a.msg+'</span>'
+          +'<button class="btn btn-sm" style="border-color:'+co[a.level]+';color:'+co[a.level]+';background:transparent;" onclick="'+a.action+'">'+a.lbl+' &rarr;</button>'
+        +'</div>';
+      }).join('');
+
+  // Gráfico de barras simples (SVG)
+  var barW = 36; var gap = 10; var chartW = (barW*2+gap)*6+gap*5; var chartH = 80;
+  var svgBars = mesi.map(function(m,i){
+    var x = i*(barW*2+gap+8);
+    var hE = m.emesso>0 ? Math.max(4, Math.round(m.emesso/maxVal*chartH)) : 0;
+    var hU = m.usato>0  ? Math.max(4, Math.round(m.usato/maxVal*chartH))  : 0;
+    return '<rect x="'+(x)+'" y="'+(chartH-hE)+'" width="'+barW+'" height="'+hE+'" fill="#003DA5" rx="3" opacity=".85"/>'
+      +'<rect x="'+(x+barW+4)+'" y="'+(chartH-hU)+'" width="'+barW+'" height="'+hU+'" fill="#059669" rx="3" opacity=".85"/>'
+      +'<text x="'+(x+barW+2)+'" y="'+(chartH+14)+'" text-anchor="middle" font-size="9" fill="#9CA3AF">'+m.nome+'</text>';
+  }).join('');
+
+  // Clienti scoperto (ordini non pagati)
+  var clientiScoperto = {};
+  ordAperti.forEach(function(o){
+    if(!o.clienteId) return;
+    if(!clientiScoperto[o.clienteId]) clientiScoperto[o.clienteId]={nome:o.clienteNome,tot:0,n:0};
+    clientiScoperto[o.clienteId].tot += parseFloat(o.totale||0);
+    clientiScoperto[o.clienteId].n++;
+  });
+  var clientiScopertArr = Object.values(clientiScoperto).sort(function(a,b){return b.tot-a.tot;});
+
+  el.innerHTML =
+    // ── HEADER
+    '<div class="ph">'
+      +'<div class="ph-ic">&#128202;</div>'
+      +'<div class="ph-tx"><h2>Dashboard</h2><p>'+today_it()+' — Panoramica completa FuelPass</p></div>'
+      +'<div class="ph-ac">'
+        +'<button class="btn btn-bl" onclick="openCV()">&#43; Voucher</button>'
+        +'<button class="btn btn-out" onclick="openBatch()">&#9889; Lotto</button>'
+      +'</div>'
+    +'</div>'
+
+    // ── ALERTAS (sempre visíveis no topo)
+    +'<div class="card" style="margin-bottom:18px;overflow:hidden;">'
+      +'<div class="card-hd" style="background:'+(alertas.length===0?'var(--gnbg)':'#FFFBEB')+';border-bottom:1px solid var(--gbd);">'
+        +'<h3 style="color:'+(alertas.length===0?'#059669':'#D97706')+';">'
+          +(alertas.length===0 ? '&#127881; Nessun Avviso' : '&#9888; '+alertas.length+' Avvisi Attivi')
+        +'</h3>'
+      +'</div>'
+      + alertasHTML
+    +'</div>'
+
+    // ── KPIs principais
+    +'<div class="sgrid" style="grid-template-columns:repeat(5,1fr);margin-bottom:18px;">'
+      +'<div class="scard bl">'
+        +'<div class="sl">Voucher Attivi</div>'
+        +'<div class="sv">'+(valid+partial)+'</div>'
+        +'<div class="ss">'+valid+' validi · '+partial+' parziali</div>'
+      +'</div>'
+      +'<div class="scard">'
+        +'<div class="sl">Saldo Circolante</div>'
+        +'<div class="sv" style="color:#003DA5;">\u20ac'+bal.toFixed(0)+'</div>'
+        +'<div class="ss">valore residuo attivo</div>'
+      +'</div>'
+      +'<div class="scard">'
+        +'<div class="sl">Utilizzi Oggi</div>'
+        +'<div class="sv">'+(todayTx||'0')+'</div>'
+        +'<div class="ss">'+(todayAmt>0?'\u20ac'+todayAmt.toFixed(2)+' scalati':'nessuna transazione')+'</div>'
+      +'</div>'
+      +'<div class="scard" style="border-left:3px solid '+(totDovuto>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">Da Incassare</div>'
+        +'<div class="sv" style="color:'+(totDovuto>0?'#D97706':'#059669')+';">\u20ac'+totDovuto.toFixed(0)+'</div>'
+        +'<div class="ss">'+ordAperti.length+' ordini aperti</div>'
+      +'</div>'
+      +'<div class="scard" style="border-left:3px solid '+(expiring7.length>0?'#DC2626':expiring30.length>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">In Scadenza</div>'
+        +'<div class="sv" style="color:'+(expiring7.length>0?'#DC2626':expiring30.length>0?'#D97706':'inherit')+';">'+(expiring7.length+expiring30.length)+'</div>'
+        +'<div class="ss">'+(expiring7.length>0?expiring7.length+' entro 7gg!':expiring30.length+' entro 30gg')+'</div>'
+      +'</div>'
+    +'</div>'
+
+    // ── Gráfico + Clienti scoperto (2 colunas)
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">'
+
+      // Gráfico evolução
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128200; Evoluzione Ultimi 6 Mesi</h3></div>'
+        +'<div style="padding:16px;">'
+          +'<div style="display:flex;gap:12px;margin-bottom:10px;font-size:11px;">'
+            +'<span><span style="display:inline-block;width:10px;height:10px;background:#003DA5;border-radius:2px;margin-right:4px;"></span>Emesso</span>'
+            +'<span><span style="display:inline-block;width:10px;height:10px;background:#059669;border-radius:2px;margin-right:4px;"></span>Utilizzato</span>'
+          +'</div>'
+          +'<svg viewBox="0 0 '+(chartW+20)+' '+(chartH+24)+'" style="width:100%;height:auto;">'
+            + svgBars
+          +'</svg>'
+        +'</div>'
+      +'</div>'
+
+      // Clienti in scoperto
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128308; Clienti con Saldo Aperto</h3>'
+          +'<button class="btn btn-out btn-sm" onclick="goPage(\'finance\')">Gestisci &rarr;</button>'
+        +'</div>'
+        +'<div style="padding:0;">'
+          +(clientiScopertArr.length===0
+            ? '<div style="padding:20px;text-align:center;font-size:12px;color:#059669;">&#127881; Nessun cliente in scoperto</div>'
+            : clientiScopertArr.map(function(c){
+                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--gbd);">'
+                  +'<div>'
+                    +'<div style="font-size:12px;font-weight:600;">'+escH(c.nome)+'</div>'
+                    +'<div style="font-size:10px;color:var(--gr);">'+c.n+' ordini aperti</div>'
+                  +'</div>'
+                  +'<div style="font-size:14px;font-weight:800;color:#D97706;">\u20ac'+c.tot.toFixed(2)+'</div>'
+                +'</div>';
+              }).join('')
+          )
+        +'</div>'
+      +'</div>'
+    +'</div>'
+
+    // ── PdV in sospeso + Azioni rapide
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">'
+
+      // PdV con liquidazioni
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128205; PdV con Liquidazioni in Sospeso</h3>'
+          +'<button class="btn btn-out btn-sm" onclick="goPage(\'liquidazioni\')">Gestisci &rarr;</button>'
+        +'</div>'
+        +(pdvSaldos.length===0
+          ? '<div style="padding:20px;text-align:center;font-size:12px;color:#059669;">&#127881; Tutti i PdV in pari</div>'
+          : pdvSaldos.map(function(x){
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--gbd);">'
+                +'<div style="font-size:12px;font-weight:600;">&#128205; '+escH(x.p.nome)+'</div>'
+                +'<div style="font-size:14px;font-weight:800;color:#D97706;">\u20ac'+x.saldo.toFixed(2)+'</div>'
+              +'</div>';
+            }).join('')
+        )
+      +'</div>'
+
+      // Azioni rapide
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#9889; Azioni Rapide</h3></div>'
+        +'<div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+          +'<button class="btn btn-bl" onclick="openCV()" style="justify-content:center;">&#43; Nuovo Voucher</button>'
+          +'<button class="btn btn-out" onclick="openBatch()" style="justify-content:center;">&#9889; Emetti Lotto</button>'
+          +'<button class="btn btn-out" onclick="goPage(\'scan\')" style="justify-content:center;">&#128269; Valida Voucher</button>'
+          +'<button class="btn btn-out" onclick="goPage(\'stampa\')" style="justify-content:center;">&#128424; Stampa</button>'
+          +'<button class="btn btn-out" onclick="goPage(\'reports\')" style="justify-content:center;">&#128196; Report</button>'
+          +'<button class="btn btn-out" onclick="goPage(\'finance\')" style="justify-content:center;">&#128178; Finanziario</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
+
+    // ── Ultimi voucher emessi
+    +'<div class="card">'
+      +'<div class="card-hd">'
+        +'<h3>&#127915; Ultimi Voucher Emessi</h3>'
+        +'<button class="btn btn-out btn-sm" onclick="goPage(\'vouchers\')">Vedi tutti &rarr;</button>'
+      +'</div>'
+      +'<table><thead><tr>'
+        +'<th>Codice</th><th>Cliente</th><th>Intestatario</th>'
+        +'<th style="text-align:right;">Valore</th><th style="text-align:right;">Saldo</th>'
+        +'<th>Stato</th><th>Scadenza</th>'
+      +'</tr></thead><tbody>'
+      +(function(){
+        var lastVs = vs.slice(-8).reverse();
+        if(!lastVs.length) return '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher emesso</td></tr>';
+        return lastVs.map(function(v){
+          var st = vSt(v);
+          var cl = cs.find(function(c){return c.id===v.clienteId;})||{};
+          var stColor={valid:'valid',partial:'partial',used:'used',expired:'expired'};
+          var stLbl={valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+          return '<tr>'
+            +'<td class="mono fw7" style="font-size:11px;color:#003DA5;">'+escH(v.id)+'</td>'
+            +'<td style="font-size:12px;">'+escH(cl.rag||cl.nome||'—')+'</td>'
+            +'<td style="font-size:12px;">'+escH(v.name||'—')+'</td>'
+            +'<td style="text-align:right;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>'
+            +'<td style="text-align:right;font-weight:700;color:#003DA5;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>'
+            +'<td><span class="badge '+(stColor[st]||'expired')+'" style="font-size:9px;">'+(stLbl[st]||st)+'</span></td>'
+            +'<td style="font-size:11px;">'+fmtDate(v.exp)+'</td>'
+          +'</tr>';
+        }).join('');
+      })()
+      +'</tbody></table>'
+    +'</div>';
 }
+
+
 
 // ══════════════════════════════════════════════════════
 // VOUCHERS PAGE
@@ -1775,14 +1990,35 @@ function applyUse(id,imp,byU){
   if(idx===-1)return;
   var v=vs[idx];
   if(imp>v.bal){showToast('Importo superiore al saldo','err');return;}
+  // Identificar PdV do operador actual
+  var pdvId = CU.pdvId || '';
+  var pdvNome = '';
+  if(pdvId){
+    var pdvObj = getPdv().find(function(p){return p.id===pdvId;});
+    pdvNome = pdvObj ? pdvObj.nome : '';
+  }
   v.bal=parseFloat((v.bal-imp).toFixed(2));
   v.tx=v.tx||[];
-  v.tx.push({date:today(),amt:imp,by:byU||CU.name,op:v.bal===0?'Utilizzo totale':'Utilizzo parziale'});
-  if(v.bal===0){v.status='used';v.usedAt=today();v.usedBy=byU||CU.name;}
-  else v.status='partial';
+  v.tx.push({
+    date:today(), amt:imp,
+    by:byU||CU.name,
+    pdvId:pdvId, pdvNome:pdvNome,
+    op:v.bal===0?'Utilizzo totale':'Utilizzo parziale'
+  });
+  if(v.bal===0){
+    v.status='used'; v.usedAt=today();
+    v.usedBy=byU||CU.name;
+    v.usedPdvId=pdvId;
+    v.usedPdvNome=pdvNome;
+  } else {
+    v.status='partial';
+    // Para uso parcial, guardar último PdV
+    v.lastPdvId=pdvId;
+    v.lastPdvNome=pdvNome;
+  }
   setVouchers(vs);
-  addLog('use','Utilizzato '+id+' — &#8364;'+imp.toFixed(2)+' da '+byU);
-  showToast('&#8364;'+imp.toFixed(2)+' scalati da '+id+' — saldo: &#8364;'+v.bal.toFixed(2),'ok');
+  addLog('use','Utilizzato '+id+' — €'+imp.toFixed(2)+' da '+(pdvNome||byU));
+  showToast('€'+imp.toFixed(2)+' scalati da '+id+' — saldo: €'+v.bal.toFixed(2),'ok');
 }
 
 // ══════════════════════════════════════════════════════
@@ -2012,16 +2248,39 @@ function pgLog(el){
 // REPORT
 // ══════════════════════════════════════════════════════
 function pgReports(el){
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#128200;</div>'
-    +'<div class="ph-tx"><h2>Report</h2><p>Statistiche, relazioni clienti e storico utilizzi</p></div></div>'
-    +'<div class="tabs">'
-    +'<div class="tab active" onclick="showRepTab(\'stats\',this)">&#128202; Statistiche</div>'
-    +'<div class="tab" onclick="showRepTab(\'cliente\',this)">&#127970; Per Cliente</div>'
-    +'<div class="tab" onclick="showRepTab(\'utilizzi\',this)">&#128203; Per Utilizzi</div>'
+  _pgRepEl = el;
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#128196;</div>'
+    +'<div class="ph-tx"><h2>Report</h2><p>Relazioni configurabili, storico e analisi voucher</p></div></div>'
+    +'<div class="tabs" style="margin-bottom:16px;">'
+      +'<div class="tab active"   id="rtab_voucher"  onclick="switchRepTab(\'voucher\',this)">&#128196; Voucher Emessi</div>'
+      +'<div class="tab"          id="rtab_storico"  onclick="switchRepTab(\'storico\',this)">&#128203; Storico Utilizzi</div>'
+      +'<div class="tab"          id="rtab_scadenza" onclick="switchRepTab(\'scadenza\',this)">&#9200; In Scadenza</div>'
+      +'<div class="tab"          id="rtab_stats"    onclick="switchRepTab(\'stats\',this)">&#128202; Statistiche</div>'
     +'</div>'
-    +'<div id="repContent"></div>';
-  showRepTab('stats',el.querySelector('.tab.active'));
+    +'<div id="repMain"></div>';
+  switchRepTab('voucher', el.querySelector('.tab.active'));
 }
+
+var _pgRepEl = null;
+var _repTabAtual = 'voucher';
+
+function switchRepTab(tab, el){
+  _repTabAtual = tab;
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  if(el) el.classList.add('active');
+  var c = document.getElementById('repMain');
+  if(!c) return;
+  if(tab==='voucher')  renderRepVoucher(c);
+  if(tab==='storico')  renderRepStorico(c);
+  if(tab==='scadenza') renderRepScadenza(c);
+  if(tab==='stats')    renderRepStats(c);
+}
+
+// Compatibilidade com showRepTab antigo
+function showRepTab(tab,el){ switchRepTab(tab,el); }
+
+
 
 function showRepTab(tab,el){
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
@@ -3636,11 +3895,264 @@ function segnaOrdPagato(ordId, dataPag){
 // NOVAS PÁGINAS — serão implementadas nas fases seguintes
 // ══════════════════════════════════════════════════════
 function pgLiquidazioni(el){
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#128260;</div>'+
-    '<div class="ph-tx"><h2>Liquidazioni PdV</h2><p>Controllo pagamenti tra sedi — in sviluppo (Fase 3)</p></div></div>'+
-    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
-    '&#128260; Modulo Liquidazioni PdV in sviluppo...<br><small>Sarà disponibile nella Fase 3</small></div>';
+  _pgLiqEl = el;
+  renderLiqFull();
 }
+
+var _pgLiqEl = null;
+
+function renderLiqFull(){
+  var el = _pgLiqEl;
+  if(!el) return;
+
+  var vouchers     = getVouchers();
+  var pdvs         = getPdv();
+  var liquidazioni = getLiquidazioni();
+
+  // Filtro PdV seleccionado
+  var filtPdv = (document.getElementById('liq_pdv')||{}).value||'';
+
+  // Construir dados por PdV
+  // Para cada PdV, calcular: vouchers recebidos, total, já liquidado, saldo
+  var pdvDados = pdvs.map(function(p){
+    // Vouchers que passaram por este PdV (usedPdvId ou lastPdvId ou em tx[].pdvId)
+    var vsDopdv = vouchers.filter(function(v){
+      if(v.usedPdvId === p.id) return true;
+      if(v.lastPdvId === p.id) return true;
+      if(v.tx && v.tx.some(function(t){return t.pdvId===p.id;})) return true;
+      return false;
+    });
+
+    // Calcular total recebido por este PdV
+    var totalRecebido = 0;
+    vsDopdv.forEach(function(v){
+      (v.tx||[]).forEach(function(t){
+        if(t.pdvId===p.id) totalRecebido += parseFloat(t.amt||0);
+      });
+      // Se usedPdvId mas sem tx detalhado, usar amt
+      if(v.usedPdvId===p.id && (!v.tx||v.tx.length===0)){
+        totalRecebido += parseFloat(v.amt||0);
+      }
+    });
+
+    // Liquidações já registadas para este PdV
+    var liqDopdv = liquidazioni.filter(function(l){return l.pdvId===p.id;});
+    var totalLiquidado = liqDopdv.reduce(function(s,l){return s+parseFloat(l.valor||0);},0);
+    var saldo = totalRecebido - totalLiquidado;
+
+    return {
+      pdv: p,
+      vouchers: vsDopdv,
+      totalRecebido: totalRecebido,
+      totalLiquidado: totalLiquidado,
+      saldo: saldo,
+      liquidazioni: liqDopdv
+    };
+  }).filter(function(d){
+    // Mostrar só PdV com actividade OU todos se não há filtro
+    if(filtPdv) return d.pdv.id === filtPdv;
+    return true;
+  });
+
+  // KPIs globais
+  var totRecebidoGlobal   = pdvDados.reduce(function(s,d){return s+d.totalRecebido;},0);
+  var totLiquidadoGlobal  = pdvDados.reduce(function(s,d){return s+d.totalLiquidado;},0);
+  var saldoGlobal         = totRecebidoGlobal - totLiquidadoGlobal;
+  var pdvsComSaldo        = pdvDados.filter(function(d){return d.saldo>0;}).length;
+
+  // Select de PdV
+  var pdvOpts = '<option value="">Tutti i PdV</option>'
+    + pdvs.map(function(p){
+        return '<option value="'+p.id+'"'+(filtPdv===p.id?' selected':'')+'>'+escH(p.nome)+'</option>';
+      }).join('');
+
+  // Construir cards por PdV
+  var cardsHTML = '';
+  if(pdvDados.length === 0){
+    cardsHTML = '<div style="padding:40px;text-align:center;color:var(--gr);">'
+      +'<div style="font-size:40px;margin-bottom:12px;">&#128205;</div>'
+      +'<div style="font-size:14px;font-weight:600;margin-bottom:6px;">Nessun Punto di Vendita trovato</div>'
+      +'<div style="font-size:12px;">Aggiungi PdV nella sezione Anagrafiche e assegna operatori con login proprio.</div>'
+      +'</div>';
+  } else {
+    cardsHTML = pdvDados.map(function(d){
+      var p = d.pdv;
+      var hasSaldo = d.saldo > 0.005;
+      var pct = d.totalRecebido > 0 ? Math.min(100, Math.round(d.totalLiquidado/d.totalRecebido*100)) : 0;
+      var borderColor = hasSaldo ? '#D97706' : '#059669';
+      var statusBadge = hasSaldo
+        ? '<span class="badge partial">&#128308; Saldo aperto: \u20ac'+d.saldo.toFixed(2)+'</span>'
+        : '<span class="badge valid">&#128994; In pari</span>';
+
+      // Storico liquidazioni di questo PdV
+      var liqRows = d.liquidazioni.length > 0
+        ? d.liquidazioni.map(function(l){
+            return '<tr style="font-size:11px;">'
+              +'<td>'+fmtDate(l.data)+'</td>'
+              +'<td class="mono" style="color:#003DA5;">\u20ac'+parseFloat(l.valor||0).toFixed(2)+'</td>'
+              +'<td style="color:var(--gr);">'+escH(l.metodo||'—')+'</td>'
+              +'<td style="color:var(--gr);">'+escH(l.note||'—')+'</td>'
+            +'</tr>';
+          }).join('')
+        : '<tr><td colspan="4" style="text-align:center;font-size:11px;color:var(--glt);padding:8px;">Nessuna liquidazione registrata</td></tr>';
+
+      // Últimos vouchers validados
+      var vsRows = d.vouchers.slice(0,5).map(function(v){
+        var txPdv = (v.tx||[]).filter(function(t){return t.pdvId===p.id;});
+        var totTx = txPdv.reduce(function(s,t){return s+parseFloat(t.amt||0);},0);
+        return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--gbd);">'
+          +'<span class="mono fw7" style="color:#003DA5;">'+escH(v.id)+'</span>'
+          +'<span>\u20ac'+(totTx||parseFloat(v.amt||0)).toFixed(2)+'</span>'
+          +'<span style="color:var(--gr);">'+fmtDate(txPdv.length?txPdv[txPdv.length-1].date:v.usedAt)+'</span>'
+        +'</div>';
+      }).join('');
+
+      return '<div class="card" style="margin-bottom:16px;border-left:4px solid '+borderColor+';">'
+        // Header do PdV
+        +'<div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gbd);">'
+          +'<div>'
+            +'<div style="font-size:15px;font-weight:700;">&#128205; '+escH(p.nome)+'</div>'
+            +'<div style="font-size:11px;color:var(--gr);margin-top:2px;">'+escH(p.ind||'')+'</div>'
+          +'</div>'
+          +'<div style="text-align:right;">'
+            +statusBadge
+            +'<div style="font-size:10px;color:var(--gr);margin-top:4px;">'+d.vouchers.length+' voucher ricevuti</div>'
+          +'</div>'
+        +'</div>'
+
+        // KPIs do PdV
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--gbd);">'
+          +'<div style="background:#fff;padding:12px 16px;text-align:center;">'
+            +'<div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.06em;">Totale Ricevuto</div>'
+            +'<div style="font-size:18px;font-weight:800;color:#003DA5;">\u20ac'+d.totalRecebido.toFixed(2)+'</div>'
+          +'</div>'
+          +'<div style="background:#fff;padding:12px 16px;text-align:center;">'
+            +'<div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.06em;">Già Liquidato</div>'
+            +'<div style="font-size:18px;font-weight:800;color:#059669;">\u20ac'+d.totalLiquidado.toFixed(2)+'</div>'
+          +'</div>'
+          +'<div style="background:#fff;padding:12px 16px;text-align:center;">'
+            +'<div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.06em;">Da Liquidare</div>'
+            +'<div style="font-size:18px;font-weight:800;color:'+(hasSaldo?'#D97706':'#059669')+';">\u20ac'+d.saldo.toFixed(2)+'</div>'
+          +'</div>'
+        +'</div>'
+
+        // Barra de progresso
+        +'<div style="padding:8px 16px;background:var(--gpl);">'
+          +'<div style="font-size:10px;color:var(--gr);margin-bottom:4px;">Liquidato: '+pct+'%</div>'
+          +'<div class="pbar"><div class="pfill'+(hasSaldo?' warn':'')+'" style="width:'+pct+'%;"></div></div>'
+        +'</div>'
+
+        // Acordeão: Storico + Vouchers
+        +'<div style="padding:12px 16px;">'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+            // Storico liquidazioni
+            +'<div>'
+              +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">&#128260; Storico Liquidazioni</div>'
+              +'<div style="max-height:100px;overflow-y:auto;">'
+                +'<table style="width:100%;"><thead><tr>'
+                  +'<th style="font-size:9px;">Data</th><th style="font-size:9px;">Valore</th><th style="font-size:9px;">Metodo</th><th style="font-size:9px;">Note</th>'
+                +'</tr></thead><tbody>'+liqRows+'</tbody></table>'
+              +'</div>'
+            +'</div>'
+            // Ultimi vouchers
+            +'<div>'
+              +'<div style="font-size:10px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">&#127915; Ultimi Voucher Ricevuti</div>'
+              +(d.vouchers.length>0 ? vsRows : '<div style="font-size:11px;color:var(--glt);">Nessun voucher ancora ricevuto</div>')
+            +'</div>'
+          +'</div>'
+        +'</div>'
+
+        // Botão registar liquidação
+        +(hasSaldo
+          ? '<div style="padding:10px 16px;border-top:1px solid var(--gbd);background:var(--gpl);">'
+              +'<button class="btn btn-bl" style="width:100%;" data-pdvid="'+p.id+'" data-pdvnome="'+escH(p.nome)+'" data-saldo="'+d.saldo.toFixed(2)+'" onclick="openLiqModal(this.dataset.pdvid,this.dataset.pdvnome,this.dataset.saldo)">'
+                +'&#128176; Registra Liquidazione a '+escH(p.nome)+' (\u20ac'+d.saldo.toFixed(2)+')'
+              +'</button>'
+            +'</div>'
+          : '')
+      +'</div>';
+    }).join('');
+  }
+
+  // Montar página
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#128260;</div>'
+    +'<div class="ph-tx"><h2>Liquidazioni PdV</h2><p>Controllo pagamenti tra sedi — Sedico, Belluno e altri punti aderenti</p></div></div>'
+
+    // KPIs globais
+    +'<div class="sgrid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">'
+      +'<div class="scard bl"><div class="sl">Totale Ricevuto dai PdV</div><div class="sv">\u20ac'+totRecebidoGlobal.toFixed(2)+'</div><div class="ss">da tutti i punti vendita</div></div>'
+      +'<div class="scard" style="border-left:3px solid #059669;"><div class="sl">Già Liquidato</div><div class="sv" style="color:#059669;">\u20ac'+totLiquidadoGlobal.toFixed(2)+'</div><div class="ss">pagato ai PdV</div></div>'
+      +'<div class="scard" style="border-left:3px solid '+(saldoGlobal>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">Da Liquidare</div>'
+        +'<div class="sv" style="color:'+(saldoGlobal>0?'#D97706':'#059669')+';">\u20ac'+saldoGlobal.toFixed(2)+'</div>'
+        +'<div class="ss">'+(saldoGlobal>0?pdvsComSaldo+' PdV in sospeso':'Tutto in pari')+'</div>'
+      +'</div>'
+      +'<div class="scard"><div class="sl">N° PdV Attivi</div><div class="sv">'+pdvDados.length+'</div><div class="ss">punti vendita</div></div>'
+    +'</div>'
+
+    // Filtro
+    +'<div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;">'
+      +'<select id="liq_pdv" onchange="renderLiqFull()" style="padding:8px 12px;border:1.5px solid var(--gbd);border-radius:8px;font-size:13px;min-width:200px;">'+pdvOpts+'</select>'
+      +'<button class="btn btn-out" onclick="exportLiqCSV()">&#8659; CSV</button>'
+    +'</div>'
+
+    // Cards por PdV
+    + cardsHTML;
+}
+
+function openLiqModal(pdvId, pdvNome, saldo){
+  _liqPdvId   = pdvId;
+  _liqPdvNome = pdvNome;
+  document.getElementById('lm_pdv').textContent    = pdvNome;
+  document.getElementById('lm_saldo').textContent  = '\u20ac'+parseFloat(saldo).toFixed(2);
+  document.getElementById('lm_valor').value        = parseFloat(saldo).toFixed(2);
+  document.getElementById('lm_data').value         = today();
+  document.getElementById('lm_metodo').value       = 'bonifico';
+  document.getElementById('lm_note').value         = '';
+  openM('liqModal');
+}
+
+function saveLiquidazione(){
+  if(!_liqPdvId) return;
+  var valor  = parseFloat(document.getElementById('lm_valor').value)||0;
+  var data   = document.getElementById('lm_data').value;
+  var metodo = document.getElementById('lm_metodo').value;
+  var note   = document.getElementById('lm_note').value.trim();
+  if(!valor||!data){showToast('Valore e data obbligatori','err');return;}
+  var liqs = getLiquidazioni();
+  var novaLiq = {
+    id:       uid(),
+    pdvId:    _liqPdvId,
+    pdvNome:  _liqPdvNome,
+    data:     data,
+    valor:    valor,
+    metodo:   metodo,
+    note:     note,
+    criadoPor: CU.name
+  };
+  liqs.push(novaLiq);
+  setLiquidazioni(liqs);
+  addLog('create','Liquidazione \u20ac'+valor.toFixed(2)+' registrata per '+_liqPdvNome);
+  showToast('Liquidazione di \u20ac'+valor.toFixed(2)+' registrata per '+_liqPdvNome,'ok');
+  closeM('liqModal');
+  renderLiqFull();
+}
+
+function exportLiqCSV(){
+  var liqs = getLiquidazioni();
+  var rows = [['Data','PdV','Valore','Metodo','Note','Registrato da']];
+  liqs.forEach(function(l){
+    rows.push([l.data||'',l.pdvNome||'',parseFloat(l.valor||0).toFixed(2),l.metodo||'',l.note||'',l.criadoPor||'']);
+  });
+  var csv = rows.map(function(r){return r.join(';');}).join('\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='liquidazioni_pdv_'+today()+'.csv';
+  a.click();
+}
+
+
 function pgFindash(el){
   el.innerHTML='<div class="ph"><div class="ph-ic">&#128202;</div>'+
     '<div class="ph-tx"><h2>Dashboard Finanziario</h2><p>KPIs e grafici — in sviluppo (Fase 5)</p></div></div>'+
@@ -3648,18 +4160,446 @@ function pgFindash(el){
     '&#128202; Dashboard Finanziario in sviluppo...<br><small>Sarà disponibile nella Fase 5</small></div>';
 }
 function pgRepScadenza(el){
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#9200;</div>'+
-    '<div class="ph-tx"><h2>Voucher in Scadenza</h2><p>Voucher in scadenza nei prossimi giorni — in sviluppo (Fase 4)</p></div></div>'+
-    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
-    '&#9200; Report In Scadenza in sviluppo...<br><small>Sarà disponibile nella Fase 4</small></div>';
-}
-function pgRepStorico(el){
-  el.innerHTML='<div class="ph"><div class="ph-ic">&#128203;</div>'+
-    '<div class="ph-tx"><h2>Storico Utilizzi</h2><p>Tutti i voucher utilizzati con data e operatore — in sviluppo (Fase 4)</p></div></div>'+
-    '<div class="card" style="padding:40px;text-align:center;color:var(--gr);">'+
-    '&#128203; Storico Utilizzi in sviluppo...<br><small>Sarà disponibile nella Fase 4</small></div>';
+  _pgRepEl = el;
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#9200;</div>'
+    +'<div class="ph-tx"><h2>Voucher in Scadenza</h2><p>Voucher in scadenza e già scaduti non utilizzati</p></div></div>'
+    +'<div id="repMain"></div>';
+  renderRepScadenza(el.querySelector('#repMain'));
 }
 
+function pgRepStorico(el){
+  _pgRepEl = el;
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#128203;</div>'
+    +'<div class="ph-tx"><h2>Storico Utilizzi</h2><p>Tutti i voucher utilizzati con data, operatore e PdV</p></div></div>'
+    +'<div id="repMain"></div>';
+  renderRepStorico(el.querySelector('#repMain'));
+}
+
+
+
+
+// ══════════════════════════════════════════════════════
+// RELATÓRIO 1 — VOUCHER EMESSI (configurável)
+// ══════════════════════════════════════════════════════
+function renderRepVoucher(c){
+  var cs = getClienti();
+  var vs = getVouchers();
+
+  // Ler filtros actuais
+  var filtCl  = (document.getElementById('rv_cl')||{}).value||'';
+  var filtSt  = (document.getElementById('rv_st')||{}).value||'';
+  var filtDa  = (document.getElementById('rv_da')||{}).value||'';
+  var filtA   = (document.getElementById('rv_a')||{}).value||'';
+
+  // Campos configuráveis
+  var campiChecked = {};
+  ['numero','cliente','beneficiario','data_emissione','data_scadenza',
+   'valore','saldo','carburante','stato','pdv','note'].forEach(function(k){
+    var el = document.getElementById('rc_'+k);
+    campiChecked[k] = el ? el.checked : true;
+  });
+
+  // Filtrar vouchers
+  var lista = vs.filter(function(v){
+    if(filtCl && v.clienteId !== filtCl) return false;
+    if(filtSt && vSt(v) !== filtSt) return false;
+    if(filtDa && v.created < filtDa) return false;
+    if(filtA  && v.created > filtA)  return false;
+    return true;
+  });
+  lista.sort(function(a,b){return (a.id||'').localeCompare(b.id||'');});
+
+  // Opções
+  var clOpts = '<option value="">Tutti i clienti</option>'
+    + cs.map(function(c){return '<option value="'+c.id+'"'+(filtCl===c.id?' selected':'')+'>'+escH(c.rag||c.nome)+'</option>';}).join('');
+  var stOpts = '<option value="">Tutti gli stati</option>'
+    +['valid','partial','used','expired'].map(function(s){
+      var lbl={valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+      return '<option value="'+s+'"'+(filtSt===s?' selected':'')+'>'+lbl[s]+'</option>';
+    }).join('');
+
+  // Configuração de campos
+  var campiConf = [
+    {id:'numero',         lbl:'N° Voucher'},
+    {id:'cliente',        lbl:'Cliente'},
+    {id:'beneficiario',   lbl:'Beneficiario'},
+    {id:'data_emissione', lbl:'Data Emissione'},
+    {id:'data_scadenza',  lbl:'Data Scadenza'},
+    {id:'valore',         lbl:'Valore (€)'},
+    {id:'saldo',          lbl:'Saldo Residuo'},
+    {id:'carburante',     lbl:'Carburante'},
+    {id:'stato',          lbl:'Stato'},
+    {id:'pdv',            lbl:'PdV Autorizzati'},
+    {id:'note',           lbl:'Note'},
+  ];
+  var campiHtml = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;">'
+    + campiConf.map(function(f){
+        var chk = campiChecked[f.id]!==false ? 'checked' : '';
+        return '<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">'
+          +'<input type="checkbox" id="rc_'+f.id+'" '+chk+' onchange="renderRepVoucher(document.getElementById(\'repMain\'))" style="accent-color:#003DA5;width:13px;height:13px;">'
+          +escH(f.lbl)+'</label>';
+      }).join('')
+    + '</div>';
+
+  // Construir tabela
+  var thCells = campiConf.filter(function(f){return campiChecked[f.id]!==false;})
+    .map(function(f){return '<th>'+escH(f.lbl)+'</th>';}).join('');
+
+  var rows = lista.map(function(v){
+    var st  = vSt(v);
+    var cl  = getClienti().find(function(c){return c.id===v.clienteId;})||{};
+    var cells = '';
+    if(campiChecked.numero)         cells += '<td class="mono fw7" style="font-size:11px;color:#003DA5;">'+escH(v.id)+'</td>';
+    if(campiChecked.cliente)        cells += '<td>'+escH(cl.rag||cl.nome||'—')+'</td>';
+    if(campiChecked.beneficiario)   cells += '<td>'+escH(v.name||'—')+'</td>';
+    if(campiChecked.data_emissione) cells += '<td style="font-size:11px;">'+fmtDate(v.created)+'</td>';
+    if(campiChecked.data_scadenza)  cells += '<td style="font-size:11px;"'+(st==='expired'?' style="color:var(--rd);"':'')+'>'+fmtDate(v.exp)+'</td>';
+    if(campiChecked.valore)         cells += '<td style="text-align:right;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
+    if(campiChecked.saldo)          cells += '<td style="text-align:right;font-weight:700;color:'+(v.bal>0?'#003DA5':'var(--gr)')+';">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
+    if(campiChecked.carburante)     cells += '<td style="font-size:11px;">'+escH(v.fuel||'—')+'</td>';
+    if(campiChecked.stato){
+      var badge={valid:'valid',partial:'partial',used:'used',expired:'expired'};
+      var lbl={valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+      cells += '<td><span class="badge '+(badge[st]||'expired')+'" style="font-size:9px;">'+(lbl[st]||st)+'</span></td>';
+    }
+    if(campiChecked.pdv)  cells += '<td style="font-size:10px;color:var(--gr);">'+(v.pdvs&&v.pdvs.length?v.pdvs.join(', '):'Tutti')+'</td>';
+    if(campiChecked.note) cells += '<td style="font-size:11px;color:var(--gr);">'+escH(v.notes||'—')+'</td>';
+    return '<tr>'+cells+'</tr>';
+  }).join('');
+
+  var totValore = lista.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
+  var totSaldo  = lista.reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
+
+  c.innerHTML =
+    // Filtros
+    '<div class="card" style="margin-bottom:14px;">'
+      +'<div style="padding:12px 16px;border-bottom:1px solid var(--gbd);">'
+        +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">&#128269; Filtri</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'
+          +'<div class="fld" style="margin:0;"><label>Cliente</label><select id="rv_cl" onchange="renderRepVoucher(document.getElementById(\'repMain\'))">'+clOpts+'</select></div>'
+          +'<div class="fld" style="margin:0;"><label>Stato</label><select id="rv_st" onchange="renderRepVoucher(document.getElementById(\'repMain\'))">'+stOpts+'</select></div>'
+          +'<div class="fld" style="margin:0;"><label>Dal</label><input id="rv_da" type="date" value="'+filtDa+'" onchange="renderRepVoucher(document.getElementById(\'repMain\'))"></div>'
+          +'<div class="fld" style="margin:0;"><label>Al</label><input id="rv_a" type="date" value="'+filtA+'" onchange="renderRepVoucher(document.getElementById(\'repMain\'))"></div>'
+        +'</div>'
+      +'</div>'
+      +'<div style="padding:12px 16px;">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">&#9881; Campi da includere nel report</div>'
+        + campiHtml
+      +'</div>'
+    +'</div>'
+
+    // Barra ações
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      +'<div style="font-size:13px;color:var(--gmd);">'
+        +'<strong>'+lista.length+'</strong> voucher &nbsp;|&nbsp; '
+        +'Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; '
+        +'Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;">'
+        +'<button class="btn btn-out" onclick="exportRepVoucherCSV()">&#8659; CSV</button>'
+        +'<button class="btn btn-bl" onclick="stampaRepVoucher()">&#128196; Stampa / PDF</button>'
+      +'</div>'
+    +'</div>'
+
+    // Tabela
+    +'<div class="card"><div style="overflow-x:auto;">'
+      +(lista.length===0
+        ? '<div style="padding:40px;text-align:center;color:var(--gr);">Nessun voucher trovato con i filtri selezionati.</div>'
+        : '<table><thead><tr>'+thCells+'</tr></thead><tbody>'+rows+'</tbody></table>'
+      )
+    +'</div></div>';
+}
+
+function exportRepVoucherCSV(){
+  var vs = getVouchers();
+  var filtCl = (document.getElementById('rv_cl')||{}).value||'';
+  var filtSt = (document.getElementById('rv_st')||{}).value||'';
+  if(filtCl) vs = vs.filter(function(v){return v.clienteId===filtCl;});
+  if(filtSt) vs = vs.filter(function(v){return vSt(v)===filtSt;});
+  var rows = [['N° Voucher','Cliente','Beneficiario','Data Emissione','Data Scadenza','Valore','Saldo','Carburante','Stato','Note']];
+  vs.forEach(function(v){
+    var cl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
+    rows.push([v.id,cl.rag||cl.nome||'',v.name||'',v.created||'',v.exp||'',
+      parseFloat(v.amt||0).toFixed(2),parseFloat(v.bal||0).toFixed(2),
+      v.fuel||'',vSt(v),v.notes||'']);
+  });
+  var csv=rows.map(function(r){return r.join(';');}).join('\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='report_voucher_'+today()+'.csv'; a.click();
+}
+
+function stampaRepVoucher(){
+  var vs = getVouchers();
+  var filtCl = (document.getElementById('rv_cl')||{}).value||'';
+  var filtSt = (document.getElementById('rv_st')||{}).value||'';
+  var filtDa = (document.getElementById('rv_da')||{}).value||'';
+  var filtA  = (document.getElementById('rv_a')||{}).value||'';
+  if(filtCl) vs = vs.filter(function(v){return v.clienteId===filtCl;});
+  if(filtSt) vs = vs.filter(function(v){return vSt(v)===filtSt;});
+  if(filtDa) vs = vs.filter(function(v){return v.created>=filtDa;});
+  if(filtA)  vs = vs.filter(function(v){return v.created<=filtA;});
+
+  var cl = filtCl ? getClienti().find(function(c){return c.id===filtCl;}) : null;
+  var clNome = cl ? (cl.rag||cl.nome) : 'Tutti i clienti';
+
+  // Campi a includere
+  var campi = ['numero','cliente','beneficiario','data_emissione','data_scadenza','valore','saldo','carburante','stato'];
+  var campiAtivi = campi.filter(function(k){
+    var el=document.getElementById('rc_'+k); return !el||el.checked;
+  });
+  var lbl={numero:'N° Voucher',cliente:'Cliente',beneficiario:'Beneficiario',
+    data_emissione:'Data Emissione',data_scadenza:'Scadenza',
+    valore:'Valore',saldo:'Saldo',carburante:'Carburante',stato:'Stato'};
+
+  var thCells = campiAtivi.map(function(k){return '<th style="background:#003DA5;color:#fff;padding:7px 10px;font-size:10px;text-align:left;letter-spacing:.05em;">'+lbl[k]+'</th>';}).join('');
+
+  var rows = vs.map(function(v){
+    var st = vSt(v);
+    var vcl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
+    var stColor={valid:'#059669',partial:'#D97706',used:'#6B7280',expired:'#DC2626'};
+    var stLbl={valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+    var cells = '';
+    campiAtivi.forEach(function(k){
+      if(k==='numero')         cells+='<td style="font-family:monospace;font-size:11px;font-weight:700;color:#003DA5;padding:6px 10px;">'+escH(v.id)+'</td>';
+      if(k==='cliente')        cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(vcl.rag||vcl.nome||'—')+'</td>';
+      if(k==='beneficiario')   cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(v.name||'—')+'</td>';
+      if(k==='data_emissione') cells+='<td style="padding:6px 10px;font-size:11px;">'+fmtDate(v.created)+'</td>';
+      if(k==='data_scadenza')  cells+='<td style="padding:6px 10px;font-size:11px;">'+fmtDate(v.exp)+'</td>';
+      if(k==='valore')         cells+='<td style="padding:6px 10px;font-size:11px;text-align:right;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
+      if(k==='saldo')          cells+='<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
+      if(k==='carburante')     cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(v.fuel||'—')+'</td>';
+      if(k==='stato')          cells+='<td style="padding:6px 10px;"><span style="background:'+(stColor[st]||'#6B7280')+'22;color:'+(stColor[st]||'#6B7280')+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'+(stLbl[st]||st)+'</span></td>';
+    });
+    return '<tr style="border-bottom:1px solid #E5E7EB;">'+cells+'</tr>';
+  }).join('');
+
+  var totValore = vs.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
+  var totSaldo  = vs.reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
+
+  var pa = document.getElementById('printArea');
+  pa.style.display='block';
+  pa.innerHTML =
+    '<div style="padding:20px;font-family:Inter,Arial,sans-serif;max-width:210mm;">'
+    // Cabeçalho FuelPass
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #003DA5;margin-bottom:16px;">'
+      +'<div style="display:flex;align-items:center;gap:12px;">'
+        +'<div style="background:#003DA5;color:#fff;border-radius:8px;padding:8px 14px;font-size:18px;font-weight:900;letter-spacing:.05em;">FP</div>'
+        +'<div>'
+          +'<div style="font-size:20px;font-weight:800;color:#003DA5;">FuelPass</div>'
+          +'<div style="font-size:10px;color:#6B7280;letter-spacing:.08em;text-transform:uppercase;">Gestione Buoni Carburante — Carburante Dolomite</div>'
+        +'</div>'
+      +'</div>'
+      +'<div style="text-align:right;">'
+        +'<div style="font-size:13px;font-weight:700;color:#1F2937;">Report Voucher Emessi</div>'
+        +'<div style="font-size:11px;color:#6B7280;">Data: '+fmtDate(today())+'</div>'
+      +'</div>'
+    +'</div>'
+    // Subtítulo cliente
+    +'<div style="background:#EBF1FB;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">'
+      +'<div>'
+        +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;">Cliente</div>'
+        +'<div style="font-size:16px;font-weight:700;">'+escH(clNome)+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;">'
+        +'<div style="font-size:11px;color:#6B7280;">'+vs.length+' voucher &nbsp;|&nbsp; Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong></div>'
+      +'</div>'
+    +'</div>'
+    // Tabela
+    +'<table style="width:100%;border-collapse:collapse;">'
+      +'<thead><tr>'+thCells+'</tr></thead>'
+      +'<tbody>'+rows+'</tbody>'
+    +'</table>'
+    +'<div style="margin-top:16px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:10px;color:#9CA3AF;text-align:center;">'
+      +'FuelPass — Carburante Dolomite / Enilive &nbsp;|&nbsp; Documento generato il '+fmtDate(today())+' &nbsp;|&nbsp; Riservato e confidenziale'
+    +'</div>'
+    +'</div>';
+
+  window.print();
+  setTimeout(function(){ pa.style.display='none'; pa.innerHTML=''; },1000);
+}
+
+// ══════════════════════════════════════════════════════
+// RELATÓRIO 2 — STORICO UTILIZZI
+// ══════════════════════════════════════════════════════
+function renderRepStorico(c){
+  var vs = getVouchers();
+  var filtCl  = (document.getElementById('rs_cl')||{}).value||'';
+  var filtDa  = (document.getElementById('rs_da')||{}).value||'';
+  var filtA   = (document.getElementById('rs_a')||{}).value||'';
+  var filtPdv = (document.getElementById('rs_pdv')||{}).value||'';
+
+  var cs = getClienti();
+  var pdvs = getPdv();
+
+  var clOpts  = '<option value="">Tutti i clienti</option>'+cs.map(function(c){return '<option value="'+c.id+'"'+(filtCl===c.id?' selected':'')+'>'+escH(c.rag||c.nome)+'</option>';}).join('');
+  var pdvOpts = '<option value="">Tutti i PdV</option>'+pdvs.map(function(p){return '<option value="'+p.id+'"'+(filtPdv===p.id?' selected':'')+'>'+escH(p.nome)+'</option>';}).join('');
+
+  // Extrair todas as transacções
+  var allTx = [];
+  vs.forEach(function(v){
+    var cl = cs.find(function(c){return c.id===v.clienteId;})||{};
+    (v.tx||[]).forEach(function(t){
+      if(filtCl && v.clienteId!==filtCl) return;
+      if(filtDa && (t.date||'')<filtDa) return;
+      if(filtA  && (t.date||'')>filtA)  return;
+      if(filtPdv && t.pdvId!==filtPdv) return;
+      allTx.push({v:v, t:t, clNome:cl.rag||cl.nome||'—'});
+    });
+    // Voucher usato totalmente sem tx detalhado
+    if(v.status==='used' && (!v.tx||v.tx.length===0)){
+      if(filtCl && v.clienteId!==filtCl) return;
+      if(filtPdv) return; // sem pdvId não filtra
+      allTx.push({v:v, t:{date:v.usedAt,amt:v.amt,by:v.usedBy,pdvNome:v.usedPdvNome||'—',op:'Utilizzo totale'}, clNome:cl.rag||cl.nome||'—'});
+    }
+  });
+  allTx.sort(function(a,b){return (b.t.date||'').localeCompare(a.t.date||'');});
+
+  var totUsato = allTx.reduce(function(s,x){return s+parseFloat(x.t.amt||0);},0);
+
+  var rows = allTx.map(function(x){
+    return '<tr>'
+      +'<td style="font-size:11px;">'+fmtDate(x.t.date)+'</td>'
+      +'<td class="mono fw7" style="font-size:11px;color:#003DA5;">'+escH(x.v.id)+'</td>'
+      +'<td>'+escH(x.clNome)+'</td>'
+      +'<td>'+escH(x.v.name||'—')+'</td>'
+      +'<td style="text-align:right;font-weight:700;">\u20ac'+parseFloat(x.t.amt||0).toFixed(2)+'</td>'
+      +'<td style="font-size:11px;color:var(--gr);">'+escH(x.t.by||'—')+'</td>'
+      +'<td style="font-size:11px;color:var(--gr);">'+escH(x.t.pdvNome||x.v.usedPdvNome||'—')+'</td>'
+      +'<td style="font-size:11px;color:var(--gr);">'+escH(x.t.op||'—')+'</td>'
+    +'</tr>';
+  }).join('');
+
+  c.innerHTML =
+    '<div class="card" style="margin-bottom:14px;">'
+      +'<div style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">'
+        +'<div class="fld" style="margin:0;flex:2;min-width:140px;"><label>Cliente</label><select id="rs_cl" onchange="renderRepStorico(document.getElementById(\'repMain\'))">'+clOpts+'</select></div>'
+        +'<div class="fld" style="margin:0;flex:1;min-width:120px;"><label>PdV</label><select id="rs_pdv" onchange="renderRepStorico(document.getElementById(\'repMain\'))">'+pdvOpts+'</select></div>'
+        +'<div class="fld" style="margin:0;"><label>Dal</label><input id="rs_da" type="date" value="'+filtDa+'" onchange="renderRepStorico(document.getElementById(\'repMain\'))"></div>'
+        +'<div class="fld" style="margin:0;"><label>Al</label><input id="rs_a" type="date" value="'+filtA+'" onchange="renderRepStorico(document.getElementById(\'repMain\'))"></div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      +'<div style="font-size:13px;color:var(--gmd);"><strong>'+allTx.length+'</strong> utilizzi &nbsp;|&nbsp; Totale usato: <strong>\u20ac'+totUsato.toFixed(2)+'</strong></div>'
+      +'<div style="display:flex;gap:8px;">'
+        +'<button class="btn btn-out" onclick="exportRepStoricoCSV()">&#8659; CSV</button>'
+        +'<button class="btn btn-bl" onclick="stampaRepStorico()">&#128196; Stampa</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="card"><div style="overflow-x:auto;">'
+      +(allTx.length===0
+        ? '<div style="padding:40px;text-align:center;color:var(--gr);">Nessun utilizzo trovato.</div>'
+        : '<table><thead><tr><th>Data</th><th>Voucher</th><th>Cliente</th><th>Beneficiario</th><th style="text-align:right;">Importo</th><th>Operatore</th><th>PdV</th><th>Tipo</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      )
+    +'</div></div>';
+}
+
+function exportRepStoricoCSV(){
+  var allTx=[];
+  getVouchers().forEach(function(v){
+    var cl=getClienti().find(function(c){return c.id===v.clienteId;})||{};
+    (v.tx||[]).forEach(function(t){
+      allTx.push([t.date||'',v.id,cl.rag||cl.nome||'',v.name||'',parseFloat(t.amt||0).toFixed(2),t.by||'',t.pdvNome||'',t.op||'']);
+    });
+  });
+  allTx.sort(function(a,b){return b[0].localeCompare(a[0]);});
+  var rows=[['Data','Voucher','Cliente','Beneficiario','Importo','Operatore','PdV','Tipo']].concat(allTx);
+  var csv=rows.map(function(r){return r.join(';');}).join('\n');
+  var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='storico_utilizzi_'+today()+'.csv';a.click();
+}
+
+function stampaRepStorico(){
+  window.print(); // simplificado — usa o print area existente
+}
+
+// ══════════════════════════════════════════════════════
+// RELATÓRIO 3 — IN SCADENZA
+// ══════════════════════════════════════════════════════
+function renderRepScadenza(c){
+  var gg = parseInt((document.getElementById('sc_gg')||{}).value)||30;
+  var vs = getVouchers();
+  var oggi = today();
+  var dataLimite = new Date();
+  dataLimite.setDate(dataLimite.getDate() + gg);
+  var lim = dataLimite.toISOString().split('T')[0];
+
+  var inScadenza = vs.filter(function(v){
+    return v.exp && v.exp >= oggi && v.exp <= lim && vSt(v) !== 'used';
+  });
+  var scaduti = vs.filter(function(v){
+    return v.exp && v.exp < oggi && vSt(v) !== 'used';
+  });
+
+  inScadenza.sort(function(a,b){return (a.exp||'').localeCompare(b.exp||'');});
+  scaduti.sort(function(a,b){return (b.exp||'').localeCompare(a.exp||'');});
+
+  function buildRows(lista, isScaduto){
+    return lista.map(function(v){
+      var cl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
+      var giorni = Math.ceil((new Date(v.exp)-new Date(oggi))/(1000*60*60*24));
+      var ggTxt = isScaduto
+        ? '<span style="color:var(--rd);font-weight:700;">Scaduto '+Math.abs(giorni)+' gg fa</span>'
+        : '<span style="color:'+(giorni<=7?'#DC2626':'#D97706')+';font-weight:700;">'+giorni+' giorni</span>';
+      return '<tr>'
+        +'<td class="mono fw7" style="font-size:11px;color:#003DA5;">'+escH(v.id)+'</td>'
+        +'<td>'+escH(cl.rag||cl.nome||'—')+'</td>'
+        +'<td>'+escH(v.name||'—')+'</td>'
+        +'<td style="font-size:11px;">'+fmtDate(v.exp)+'</td>'
+        +'<td>'+ggTxt+'</td>'
+        +'<td style="text-align:right;font-weight:700;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>'
+      +'</tr>';
+    }).join('');
+  }
+
+  c.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+      +'<div class="fld" style="margin:0;display:flex;align-items:center;gap:8px;">'
+        +'<label style="margin:0;font-size:13px;">Mostra voucher in scadenza nei prossimi</label>'
+        +'<select id="sc_gg" onchange="renderRepScadenza(document.getElementById(\'repMain\'))" style="padding:7px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:13px;font-weight:700;">'
+          +[7,15,30,60,90].map(function(g){return '<option value="'+g+'"'+(gg===g?' selected':'')+'>'+g+' giorni</option>';}).join('')
+        +'</select>'
+      +'</div>'
+      +'<button class="btn btn-out" onclick="exportRepScadenzaCSV()">&#8659; CSV</button>'
+    +'</div>'
+
+    // Em scadenza
+    +'<div style="font-size:11px;font-weight:700;color:#D97706;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">&#9200; In Scadenza nei prossimi '+gg+' giorni ('+inScadenza.length+')</div>'
+    +'<div class="card" style="margin-bottom:16px;border-left:4px solid #D97706;"><div style="overflow-x:auto;">'
+      +(inScadenza.length===0
+        ? '<div style="padding:20px;text-align:center;color:var(--gr);font-size:12px;">Nessun voucher in scadenza &#127881;</div>'
+        : '<table><thead><tr><th>Voucher</th><th>Cliente</th><th>Beneficiario</th><th>Scadenza</th><th>Mancano</th><th style="text-align:right;">Saldo</th></tr></thead><tbody>'+buildRows(inScadenza,false)+'</tbody></table>'
+      )
+    +'</div></div>'
+
+    // Già scaduti
+    +'<div style="font-size:11px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">&#10060; Già Scaduti non utilizzati ('+scaduti.length+')</div>'
+    +'<div class="card" style="border-left:4px solid #DC2626;"><div style="overflow-x:auto;">'
+      +(scaduti.length===0
+        ? '<div style="padding:20px;text-align:center;color:var(--gr);font-size:12px;">Nessun voucher scaduto &#127881;</div>'
+        : '<table><thead><tr><th>Voucher</th><th>Cliente</th><th>Beneficiario</th><th>Scaduto il</th><th>Da quanto</th><th style="text-align:right;">Saldo perso</th></tr></thead><tbody>'+buildRows(scaduti,true)+'</tbody></table>'
+      )
+    +'</div></div>';
+}
+
+function exportRepScadenzaCSV(){
+  var gg=parseInt((document.getElementById('sc_gg')||{}).value)||30;
+  var oggi=today();
+  var lim=new Date();lim.setDate(lim.getDate()+gg);
+  var limStr=lim.toISOString().split('T')[0];
+  var vs=getVouchers().filter(function(v){return v.exp&&vSt(v)!=='used';});
+  var rows=[['Voucher','Cliente','Beneficiario','Scadenza','Saldo','Stato']];
+  vs.forEach(function(v){
+    var cl=getClienti().find(function(c){return c.id===v.clienteId;})||{};
+    var stato=v.exp<oggi?'Scaduto':(v.exp<=limStr?'In scadenza':'OK');
+    rows.push([v.id,cl.rag||cl.nome||'',v.name||'',v.exp||'',parseFloat(v.bal||0).toFixed(2),stato]);
+  });
+  var csv=rows.map(function(r){return r.join(';');}).join('\n');
+  var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='scadenza_voucher_'+today()+'.csv';a.click();
+}
 
 // ══════════════════════════════════════════════════════
 // GERAÇÃO DE ORDINI RETROATIVOS
