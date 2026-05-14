@@ -1925,6 +1925,26 @@ function pgVouchers(el){
     +'<div class="tab '+(_vf==='expired'?'active':'')+'" onclick="setVF(\'expired\',this)">Scaduti ('+cnt.expired+')</div>'
     +'</div>'
     +'<div class="swrap"><input id="vsrch" placeholder="Cerca codice, nome..." oninput="renderVT()"/></div>'
+    +'<div style="display:flex;align-items:center;gap:6px;">'
+      +'<select id="vSortSel" onchange="sortVSel()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'
+        +'<option value="id_asc">N\u00b0 Codice \u2191</option>'
+        +'<option value="id_desc">N\u00b0 Codice \u2193</option>'
+        +'<option value="name_asc">Intestatario A-Z</option>'
+        +'<option value="name_desc">Intestatario Z-A</option>'
+        +'<option value="cliente_asc">Cliente A-Z</option>'
+        +'<option value="cliente_desc">Cliente Z-A</option>'
+        +'<option value="created_desc">Data Emissione \u2193 (recenti)</option>'
+        +'<option value="created_asc">Data Emissione \u2191 (vecchi)</option>'
+        +'<option value="exp_asc">Scadenza \u2191 (prossimi)</option>'
+        +'<option value="exp_desc">Scadenza \u2193 (lontani)</option>'
+        +'<option value="amt_desc">Importo \u2193 (maggiore)</option>'
+        +'<option value="amt_asc">Importo \u2191 (minore)</option>'
+        +'<option value="bal_desc">Saldo \u2193 (maggiore)</option>'
+        +'<option value="bal_asc">Saldo \u2191 (minore)</option>'
+        +'<option value="stato_asc">Stato (validi prima)</option>'
+        +'<option value="stato_desc">Stato (scaduti prima)</option>'
+      +'</select>'
+    +'</div>'
     +'</div>'
     +'<div id="batchBar" style="display:none;background:#EBF1FB;border:1.5px solid #003DA5;border-radius:10px;padding:10px 16px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">'
     +'<span id="batchCount" style="font-size:13px;font-weight:600;color:#003DA5;">0 selezionati</span>'
@@ -1951,6 +1971,46 @@ function pgVouchers(el){
 function setVF(f,el){_vf=f;document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});el.classList.add('active');renderVT();}
 function renderVT(){var tb=document.getElementById('vtbody');if(tb)tb.innerHTML=filtVRows();}
 
+
+function sortVClick(campo){
+  if(_vSort===campo){
+    _vSortDir = _vSortDir==='asc' ? 'desc' : 'asc';
+  } else {
+    _vSort = campo;
+    _vSortDir = 'asc';
+  }
+  // Sincronizar o select
+  var sel = document.getElementById('vSortSel');
+  if(sel) sel.value = campo+'_'+_vSortDir;
+  // Actualizar setas
+  ['id','name','cliente','amt','bal','stato','exp'].forEach(function(k){
+    var el = document.getElementById('sa_'+k);
+    if(el){
+      if(k===campo){
+        el.textContent = _vSortDir==='asc' ? '\u25B2' : '\u25BC';
+        el.style.color = '#003DA5';
+      } else {
+        el.textContent = '\u25B4';
+        el.style.color = 'var(--glt)';
+      }
+    }
+  });
+  renderVT();
+}
+
+function sortVSel(){
+  var sel = document.getElementById('vSortSel');
+  if(!sel) return;
+  var val = sel.value;
+  var parts = val.split('_');
+  // Último elemento é a direcção
+  var dir = parts.pop();
+  var campo = parts.join('_');
+  _vSort = campo;
+  _vSortDir = dir;
+  renderVT();
+}
+
 function sortV(campo){
   if(_vSort===campo){
     _vSortDir = _vSortDir==='asc' ? 'desc' : 'asc';
@@ -1958,7 +2018,10 @@ function sortV(campo){
     _vSort = campo;
     _vSortDir = 'asc';
   }
-  // Actualizar setas visuais nos headers
+  // Sincronizar select
+  var sel = document.getElementById('vSortSel');
+  if(sel) sel.value = campo+'_'+_vSortDir;
+  // Actualizar setas nos headers
   document.querySelectorAll('.sort-th').forEach(function(th){
     var arr = th.querySelector('.sort-arr');
     if(arr){
