@@ -1957,6 +1957,7 @@ function pgVouchers(el){
     +'<div class="card"><table><thead><tr>'
     +'<th style="width:32px;"><input type="checkbox" id="chkAll" onchange="chkAllV(this)" title="Seleziona tutti"/></th>'
     +'<th class="sort-th" data-sort="id" onclick="sortV(\'id\')" style="cursor:pointer;">Codice<span class="sort-arr" style="font-size:8px;color:#003DA5;"> \u25B2</span></th>'
+    +'<th class="sort-th" data-sort="created" onclick="sortV(\'created\')" style="cursor:pointer;">Emissione<span class="sort-arr" style="font-size:8px;color:var(--glt);"> \u25B4</span></th>'
     +'<th class="sort-th" data-sort="name" onclick="sortV(\'name\')" style="cursor:pointer;">Intestatario<span class="sort-arr" style="font-size:8px;color:var(--glt);"> \u25B4</span></th>'
     +'<th class="sort-th" data-sort="cliente" onclick="sortV(\'cliente\')" style="cursor:pointer;">Cliente<span class="sort-arr" style="font-size:8px;color:var(--glt);"> \u25B4</span></th>'
     +'<th class="sort-th" data-sort="amt" onclick="sortV(\'amt\')" style="cursor:pointer;">Importo<span class="sort-arr" style="font-size:8px;color:var(--glt);"> \u25B4</span></th>'
@@ -1983,7 +1984,7 @@ function sortVClick(campo){
   var sel = document.getElementById('vSortSel');
   if(sel) sel.value = campo+'_'+_vSortDir;
   // Actualizar setas
-  ['id','name','cliente','amt','bal','stato','exp'].forEach(function(k){
+  ['id','created','name','cliente','amt','bal','stato','exp'].forEach(function(k){
     var el = document.getElementById('sa_'+k);
     if(el){
       if(k===campo){
@@ -2068,7 +2069,7 @@ function filtVRows(){
   });
   if(_vf!=='all')vs=vs.filter(function(v){return vSt(v)===_vf;});
   if(q)vs=vs.filter(function(v){return v.id.toLowerCase().indexOf(q)>-1||v.name.toLowerCase().indexOf(q)>-1||stazioneName(v.emitId).toLowerCase().indexOf(q)>-1||clienteName(v.clienteId).toLowerCase().indexOf(q)>-1;});
-  if(!vs.length)return '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher trovato</td></tr>';
+  if(!vs.length)return '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher trovato</td></tr>';
   return vs.map(function(v){
     var st=vSt(v);
     var bc=v.bal===0?'var(--rd)':v.bal<v.amt?'var(--am)':'var(--gn)';
@@ -2077,6 +2078,7 @@ function filtVRows(){
     return '<tr id="vr_'+v.id+'">'
       +'<td style="width:32px;text-align:center;"><input type="checkbox" class="vchk" data-vid="'+v.id+'" onchange="onVChk()"/></td>'
       +'<td><span class="mono c-bl fw7" style="font-size:12px;">'+v.id+'</span></td>'
+      +'<td style="font-size:11px;color:var(--gr)">'+fmtDate(v.created)+'</td>'
       +'<td><div class="fw7">'+escH(v.name)+'</div></td>'
       +'<td style="font-size:11px;">'+escH(clienteName(v.clienteId))+'</td>'
       +'<td><strong>&#8364;'+v.amt+'</strong></td>'
