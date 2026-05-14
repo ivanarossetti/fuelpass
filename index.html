@@ -1157,15 +1157,49 @@ function setUsers(arr){
 }
 function setClienti(arr){
   _cache.clienti=arr.slice();
-  sbUpsert('clienti', arr).catch(function(e){console.warn('sync cl',e);});
+  // Normalizar campos para o Supabase — todos devem ter as mesmas chaves
+  var sbArr = arr.map(function(c){
+    return {
+      id: c.id,
+      nome: c.nome||'',
+      rag: c.rag||'',
+      piva: c.piva||'',
+      sdi: c.sdi||'',
+      ind: c.ind||'',
+      cit: c.cit||'',
+      tel: c.tel||'',
+      email: c.email||'',
+      logo: c.logo||null
+    };
+  });
+  sbUpsert('clienti', sbArr).catch(function(e){console.warn('sync cl',e);});
 }
 function setStazioni(arr){
   _cache.stazioni=arr.slice();
-  sbUpsert('stazioni', arr).catch(function(e){console.warn('sync st',e);});
+  var sbArr = arr.map(function(s){
+    return {
+      id: s.id,
+      nome: s.nome||'',
+      marca: s.marca||'',
+      ind: s.ind||'',
+      logo: s.logo||null
+    };
+  });
+  sbUpsert('stazioni', sbArr).catch(function(e){console.warn('sync st',e);});
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
-  sbUpsert('pdv', arr).catch(function(e){console.warn('sync pdv',e);});
+  var sbArr = arr.map(function(p){
+    return {
+      id: p.id,
+      nome: p.nome||'',
+      ind: p.ind||'',
+      tel: p.tel||'',
+      note: p.note||'',
+      logo: p.logo||null
+    };
+  });
+  sbUpsert('pdv', sbArr).catch(function(e){console.warn('sync pdv',e);});
 }
 function setMessages(arr){
   _cache.messages=arr.slice();
