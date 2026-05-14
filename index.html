@@ -1149,27 +1149,27 @@ function getLog(){return _cache.log.slice();}
 
 function setVouchers(arr){
   _cache.vouchers=arr.slice();
-  sbUpsert('/vouchers', arr.map(vToSb)).catch(function(e){console.warn('sync v',e);});
+  sbUpsert('vouchers', arr.map(vToSb)).catch(function(e){console.warn('sync v',e);});
 }
 function setUsers(arr){
   _cache.users=arr.slice();
-  sbUpsert('/utenti', arr.map(uToSb)).catch(function(e){console.warn('sync u',e);});
+  sbUpsert('utenti', arr.map(uToSb)).catch(function(e){console.warn('sync u',e);});
 }
 function setClienti(arr){
   _cache.clienti=arr.slice();
-  sbUpsert('/clienti', arr).catch(function(e){console.warn('sync cl',e);});
+  sbUpsert('clienti', arr).catch(function(e){console.warn('sync cl',e);});
 }
 function setStazioni(arr){
   _cache.stazioni=arr.slice();
-  sbUpsert('/stazioni', arr).catch(function(e){console.warn('sync st',e);});
+  sbUpsert('stazioni', arr).catch(function(e){console.warn('sync st',e);});
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
-  sbUpsert('/pdv', arr).catch(function(e){console.warn('sync pdv',e);});
+  sbUpsert('pdv', arr).catch(function(e){console.warn('sync pdv',e);});
 }
 function setMessages(arr){
   _cache.messages=arr.slice();
-  sbUpsert('/messaggi', arr.map(mToSb)).catch(function(e){console.warn('sync msg',e);});
+  sbUpsert('messaggi', arr.map(mToSb)).catch(function(e){console.warn('sync msg',e);});
 }
 function setLog(arr){
   _cache.log=arr.slice(-500);
@@ -1200,7 +1200,7 @@ function today_it(){
   var months=['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
   return days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear();
 }
-function uid(){return 'X'+Date.now().toString(36).toUpperCase();}
+function uid(){return 'X'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).substring(2,5).toUpperCase();}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escA(s){return String(s||'').replace(/"/g,'&quot;');}
 function vSt(v){
