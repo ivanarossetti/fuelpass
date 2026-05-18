@@ -204,11 +204,10 @@ tr:hover td{background:rgba(0,61,165,.02);}
 
 /* ── PRINT ── */
 @media print{
-  @page{margin:0;size:A4 portrait;}
-  html,body{margin:0!important;padding:0!important;width:210mm!important;}
-  body *{visibility:hidden!important;}
-  #app,#loginScreen,.twrap{display:none!important;}
-  #printArea{visibility:visible!important;display:block!important;position:absolute!important;top:0!important;left:0!important;width:100%!important;background:white!important;z-index:99999!important;margin:0!important;padding:0!important;}
+  @page{margin:10mm;size:A4 portrait;}
+  html,body{margin:0!important;padding:0!important;width:100%!important;background:white!important;}
+  body > *:not(#printArea){display:none!important;}
+  #printArea{display:block!important;position:static!important;width:100%!important;background:white!important;margin:0!important;padding:0!important;}
   #printArea *{visibility:visible!important;}
   .pgbreak{page-break-after:always!important;break-after:page!important;}
 }
@@ -952,6 +951,9 @@ tr:hover td{background:rgba(0,61,165,.02);}
 <div id="printArea" style="display:none;"></div>
 
 <script>
+// ══════════════════════════════════════════════════════
+// FUELPASS — SUPABASE CONFIG
+// ══════
 // ══════════════════════════════════════════════════════
 // FUELPASS — SUPABASE CONFIG
 // ══════════════════════════════════════════════════════
@@ -4914,76 +4916,81 @@ function exportRepVoucherCSV(){
 
 function stampaRepVoucher(){
   try {
-    var vs = getVouchers();
+    var vs = getVouchers().slice();
     var filtCl = (document.getElementById('rv_cl')||{}).value||'';
     var filtSt = (document.getElementById('rv_st')||{}).value||'';
     var filtDa = (document.getElementById('rv_da')||{}).value||'';
     var filtA  = (document.getElementById('rv_a')||{}).value||'';
     if(filtCl) vs = vs.filter(function(v){return v.clienteId===filtCl;});
     if(filtSt) vs = vs.filter(function(v){return vSt(v)===filtSt;});
-    if(filtDa) vs = vs.filter(function(v){return v.created>=filtDa;});
-    if(filtA)  vs = vs.filter(function(v){return v.created<=filtA;});
+    if(filtDa) vs = vs.filter(function(v){return (v.created||'')>=filtDa;});
+    if(filtA)  vs = vs.filter(function(v){return (v.created||'')<=filtA;});
+
+    // ORDENAR POR NÚMERO DO VOUCHER
+    vs.sort(function(a,b){
+      var na = parseInt((a.id||'').replace(/[^0-9]/g,''))||0;
+      var nb = parseInt((b.id||'').replace(/[^0-9]/g,''))||0;
+      return na - nb;
+    });
 
     var cl = filtCl ? getClienti().find(function(c){return c.id===filtCl;}) : null;
     var clNome = cl ? (cl.rag||cl.nome) : 'Tutti i clienti';
 
-    // Campi seleccionados
+    // Campos seleccionados
     var campi = ['numero','cliente','beneficiario','data_emissione','data_scadenza','valore','saldo','carburante','stato','note','tot_benef'];
     var campiAtivi = campi.filter(function(k){
       var el = document.getElementById('rc_'+k);
       return el ? el.checked : false;
     });
 
+    // Se nenhum campo seleccionado, usar default
     if(campiAtivi.length===0){
-      showToast('Seleziona almeno un campo per il report','err');
-      return;
+      campiAtivi = ['numero','beneficiario','valore','saldo','stato'];
     }
 
     var lbl = {
-      numero:'N\u00b0 Voucher', cliente:'Cliente', beneficiario:'Beneficiario',
-      data_emissione:'Data Emissione', data_scadenza:'Scadenza',
+      numero:'N. Voucher', cliente:'Cliente', beneficiario:'Beneficiario',
+      data_emissione:'Emissione', data_scadenza:'Scadenza',
       valore:'Valore', saldo:'Saldo', carburante:'Carburante',
       stato:'Stato', note:'Note', tot_benef:'Tot. Beneficiario'
     };
 
-    // Header da tabela
     var thCells = campiAtivi.map(function(k){
-      return '<th style="background:#003DA5;color:#fff;padding:7px 10px;font-size:10px;text-align:left;letter-spacing:.05em;">'+lbl[k]+'</th>';
+      var align = (k==='valore'||k==='saldo'||k==='tot_benef') ? 'text-align:right;' : 'text-align:left;';
+      return '<th style="background:#003DA5;color:#fff;padding:6px 8px;font-size:9px;'+align+'letter-spacing:.04em;">'+lbl[k]+'</th>';
     }).join('');
 
-    // Linhas da tabela
-    var rows = vs.map(function(v){
+    var rows = vs.map(function(v,i){
       var st = vSt(v);
       var vcl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
-      var stColor = {valid:'#059669',partial:'#D97706',used:'#6B7280',expired:'#DC2626'};
       var stLbl = {valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+      var bgRow = i%2===0 ? '#fff' : '#F9FAFB';
       var cells = '';
       campiAtivi.forEach(function(k){
-        var td = '<td style="padding:6px 10px;font-size:11px;border-bottom:1px solid #E5E7EB;">';
-        if(k==='numero')         cells += td+'<span style="font-family:monospace;font-weight:700;color:#003DA5;">'+escH(v.id)+'</span></td>';
-        if(k==='cliente')        cells += td+escH(vcl.rag||vcl.nome||'\u2014')+'</td>';
-        if(k==='beneficiario')   cells += td+escH(v.name||'\u2014')+'</td>';
-        if(k==='data_emissione') cells += td+fmtDate(v.created)+'</td>';
-        if(k==='data_scadenza')  cells += td+fmtDate(v.exp)+'</td>';
-        if(k==='valore')         cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;border-bottom:1px solid #E5E7EB;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
-        if(k==='saldo')          cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #E5E7EB;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
-        if(k==='carburante')     cells += td+escH(v.fuel||'\u2014')+'</td>';
-        if(k==='stato')          cells += td+'<span style="background:'+(stColor[st]||'#6B7280')+'22;color:'+(stColor[st]||'#6B7280')+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'+(stLbl[st]||st)+'</span></td>';
-        if(k==='note')           cells += td+'<span style="color:#6B7280;">'+escH(v.notes||'\u2014')+'</span></td>';
+        var style = 'padding:5px 8px;font-size:10px;border-bottom:1px solid #E5E7EB;background:'+bgRow+';';
+        if(k==='numero')         cells += '<td style="'+style+'font-family:monospace;font-weight:700;color:#003DA5;">'+escH(v.id)+'</td>';
+        if(k==='cliente')        cells += '<td style="'+style+'">'+escH(vcl.rag||vcl.nome||'\u2014')+'</td>';
+        if(k==='beneficiario')   cells += '<td style="'+style+'">'+escH(v.name||'\u2014')+'</td>';
+        if(k==='data_emissione') cells += '<td style="'+style+'">'+fmtDate(v.created)+'</td>';
+        if(k==='data_scadenza')  cells += '<td style="'+style+'">'+fmtDate(v.exp)+'</td>';
+        if(k==='valore')         cells += '<td style="'+style+'text-align:right;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
+        if(k==='saldo')          cells += '<td style="'+style+'text-align:right;font-weight:700;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
+        if(k==='carburante')     cells += '<td style="'+style+'">'+escH(v.fuel||'\u2014')+'</td>';
+        if(k==='stato')          cells += '<td style="'+style+'"><span style="font-size:9px;font-weight:600;">'+(stLbl[st]||st)+'</span></td>';
+        if(k==='note')           cells += '<td style="'+style+'color:#6B7280;">'+escH(v.notes||'')+'</td>';
         if(k==='tot_benef'){
           var bn = (v.name||'').toLowerCase().trim();
           var tb = vs.filter(function(x){return (x.name||'').toLowerCase().trim()===bn;}).reduce(function(s,x){return s+parseFloat(x.amt||0);},0);
-          cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;color:#003DA5;border-bottom:1px solid #E5E7EB;">\u20ac'+tb.toFixed(2)+'</td>';
+          cells += '<td style="'+style+'text-align:right;font-weight:700;color:#003DA5;">\u20ac'+tb.toFixed(2)+'</td>';
         }
       });
       return '<tr>'+cells+'</tr>';
     }).join('');
 
-    // Totais
     var totValore = vs.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
     var totSaldo  = vs.reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
 
-    // Subtotais por beneficiário (se campo activo)
+    // Subtotais por beneficiário
     var subtotHTML = '';
     if(campiAtivi.indexOf('tot_benef') > -1){
       var perBenef = {};
@@ -4995,84 +5002,86 @@ function stampaRepVoucher(){
         perBenef[bn].saldo += parseFloat(v.bal||0);
       });
       var bArr = Object.keys(perBenef).sort();
-      subtotHTML = '<div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;border-bottom:2px solid #003DA5;padding-bottom:4px;">Riepilogo per Beneficiario</div>'
+      subtotHTML = '<div style="margin-top:14px;"><div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;border-bottom:2px solid #003DA5;padding-bottom:3px;">Riepilogo per Beneficiario</div>'
         +'<table style="width:100%;border-collapse:collapse;">'
-        +'<thead><tr><th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:left;color:#003DA5;">Beneficiario</th>'
-        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:center;color:#003DA5;">N\u00b0 Voucher</th>'
-        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:right;color:#003DA5;">Totale Emesso</th>'
-        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:right;color:#003DA5;">Saldo Residuo</th>'
+        +'<thead><tr><th style="background:#EBF1FB;padding:4px 8px;font-size:9px;text-align:left;color:#003DA5;">Beneficiario</th>'
+        +'<th style="background:#EBF1FB;padding:4px 8px;font-size:9px;text-align:center;color:#003DA5;">N. Voucher</th>'
+        +'<th style="background:#EBF1FB;padding:4px 8px;font-size:9px;text-align:right;color:#003DA5;">Totale</th>'
+        +'<th style="background:#EBF1FB;padding:4px 8px;font-size:9px;text-align:right;color:#003DA5;">Saldo</th>'
         +'</tr></thead><tbody>'
         + bArr.map(function(bn){
             var d = perBenef[bn];
             return '<tr style="border-bottom:1px solid #E5E7EB;">'
-              +'<td style="padding:5px 10px;font-size:11px;font-weight:600;">'+escH(bn)+'</td>'
-              +'<td style="padding:5px 10px;font-size:11px;text-align:center;">'+d.n+'</td>'
-              +'<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;">\u20ac'+d.tot.toFixed(2)+'</td>'
-              +'<td style="padding:5px 10px;font-size:11px;text-align:right;color:#059669;">\u20ac'+d.saldo.toFixed(2)+'</td>'
+              +'<td style="padding:4px 8px;font-size:10px;font-weight:600;">'+escH(bn)+'</td>'
+              +'<td style="padding:4px 8px;font-size:10px;text-align:center;">'+d.n+'</td>'
+              +'<td style="padding:4px 8px;font-size:10px;text-align:right;font-weight:700;">\u20ac'+d.tot.toFixed(2)+'</td>'
+              +'<td style="padding:4px 8px;font-size:10px;text-align:right;color:#059669;">\u20ac'+d.saldo.toFixed(2)+'</td>'
             +'</tr>';
           }).join('')
         +'<tr style="background:#EBF1FB;font-weight:800;">'
-          +'<td style="padding:6px 10px;font-size:11px;">TOTALE</td>'
-          +'<td style="padding:6px 10px;font-size:11px;text-align:center;">'+vs.length+'</td>'
-          +'<td style="padding:6px 10px;font-size:11px;text-align:right;">\u20ac'+totValore.toFixed(2)+'</td>'
-          +'<td style="padding:6px 10px;font-size:11px;text-align:right;color:#059669;">\u20ac'+totSaldo.toFixed(2)+'</td>'
+          +'<td style="padding:4px 8px;font-size:10px;">TOTALE</td>'
+          +'<td style="padding:4px 8px;font-size:10px;text-align:center;">'+vs.length+'</td>'
+          +'<td style="padding:4px 8px;font-size:10px;text-align:right;">\u20ac'+totValore.toFixed(2)+'</td>'
+          +'<td style="padding:4px 8px;font-size:10px;text-align:right;color:#059669;">\u20ac'+totSaldo.toFixed(2)+'</td>'
         +'</tr>'
         +'</tbody></table></div>';
     }
 
-    // Montar o printArea
-    var pa = document.getElementById('printArea');
-    pa.innerHTML = '';
-    pa.style.display = 'block';
-    pa.innerHTML =
-      '<div style="padding:20px;font-family:Inter,Arial,sans-serif;max-width:210mm;color:#1F2937;">'
+    // MONTAR O PDF — usando estilos inline para máxima compatibilidade
+    var pdfHTML =
+      '<div id="printContent" style="padding:15mm;font-family:Inter,Arial,Helvetica,sans-serif;color:#1F2937;font-size:10px;line-height:1.4;">'
       // Header
-      +'<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #003DA5;margin-bottom:16px;">'
-        +'<div style="display:flex;align-items:center;gap:12px;">'
-          +'<div style="background:#003DA5;color:#fff;border-radius:8px;padding:8px 14px;font-size:18px;font-weight:900;letter-spacing:.05em;">FP</div>'
-          +'<div>'
-            +'<div style="font-size:20px;font-weight:800;color:#003DA5;">FuelPass</div>'
-            +'<div style="font-size:10px;color:#6B7280;letter-spacing:.08em;text-transform:uppercase;">Gestione Buoni Carburante \u2014 Carburante Dolomite</div>'
-          +'</div>'
-        +'</div>'
-        +'<div style="text-align:right;">'
-          +'<div style="font-size:13px;font-weight:700;color:#1F2937;">Report Voucher Emessi</div>'
-          +'<div style="font-size:11px;color:#6B7280;">Data: '+fmtDate(today())+'</div>'
-        +'</div>'
-      +'</div>'
-      // Info cliente
-      +'<div style="background:#EBF1FB;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">'
-        +'<div>'
-          +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;">Cliente</div>'
-          +'<div style="font-size:16px;font-weight:700;">'+escH(clNome)+'</div>'
-        +'</div>'
-        +'<div style="text-align:right;font-size:11px;color:#6B7280;">'
-          +vs.length+' voucher | Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> | Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong>'
-        +'</div>'
-      +'</div>'
+      +'<table style="width:100%;border-collapse:collapse;margin-bottom:12px;"><tr>'
+        +'<td style="vertical-align:middle;">'
+          +'<span style="display:inline-block;background:#003DA5;color:#fff;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:900;letter-spacing:.04em;vertical-align:middle;">FP</span>'
+          +'<span style="display:inline-block;margin-left:10px;vertical-align:middle;">'
+            +'<span style="font-size:18px;font-weight:800;color:#003DA5;">FuelPass</span><br/>'
+            +'<span style="font-size:9px;color:#6B7280;letter-spacing:.06em;">GESTIONE BUONI CARBURANTE \u2014 CARBURANTE DOLOMITE</span>'
+          +'</span>'
+        +'</td>'
+        +'<td style="text-align:right;vertical-align:middle;">'
+          +'<span style="font-size:12px;font-weight:700;color:#1F2937;">Report Voucher Emessi</span><br/>'
+          +'<span style="font-size:10px;color:#6B7280;">'+fmtDate(today())+'</span>'
+        +'</td>'
+      +'</tr></table>'
+      +'<div style="border-top:3px solid #003DA5;margin-bottom:12px;"></div>'
+      // Info
+      +'<table style="width:100%;border-collapse:collapse;background:#EBF1FB;border-radius:6px;margin-bottom:12px;"><tr>'
+        +'<td style="padding:8px 12px;">'
+          +'<span style="font-size:9px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.06em;">Cliente</span><br/>'
+          +'<span style="font-size:14px;font-weight:700;">'+escH(clNome)+'</span>'
+        +'</td>'
+        +'<td style="padding:8px 12px;text-align:right;font-size:10px;color:#6B7280;">'
+          +vs.length+' voucher &nbsp;|&nbsp; Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong>'
+        +'</td>'
+      +'</tr></table>'
       // Tabela
       +'<table style="width:100%;border-collapse:collapse;">'
         +'<thead><tr>'+thCells+'</tr></thead>'
         +'<tbody>'+rows+'</tbody>'
       +'</table>'
-      // Subtotais por beneficiário
       + subtotHTML
       // Footer
-      +'<div style="margin-top:16px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:10px;color:#9CA3AF;text-align:center;">'
-        +'FuelPass \u2014 Carburante Dolomite / Enilive | Documento generato il '+fmtDate(today())+' | Riservato e confidenziale'
+      +'<div style="margin-top:14px;padding-top:8px;border-top:1px solid #E5E7EB;font-size:9px;color:#9CA3AF;text-align:center;">'
+        +'FuelPass \u2014 Carburante Dolomite / Enilive &nbsp;|&nbsp; '+fmtDate(today())+' &nbsp;|&nbsp; Riservato e confidenziale'
       +'</div>'
       +'</div>';
 
-    // Aguardar renderização e imprimir
+    var pa = document.getElementById('printArea');
+    pa.innerHTML = pdfHTML;
+    pa.style.display = 'block';
+
     setTimeout(function(){
       window.print();
       setTimeout(function(){ pa.style.display='none'; pa.innerHTML=''; }, 2000);
-    }, 300);
+    }, 500);
+
   } catch(err) {
     console.error('Errore stampa PDF:', err);
-    showToast('Errore generazione PDF: '+err.message, 'err');
+    showToast('Errore: '+err.message, 'err');
   }
 }
+
 
 
 // ══════════════════════════════════════════════════════
@@ -5958,6 +5967,3 @@ function updateMobileTopbar(){
   if(el && CU) el.textContent = CU.name ? CU.name.split(' ')[0] : '—';
 }
 
-</script>
-</body>
-</html>
