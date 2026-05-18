@@ -207,7 +207,8 @@ tr:hover td{background:rgba(0,61,165,.02);}
   @page{margin:0;size:A4 portrait;}
   html,body{margin:0!important;padding:0!important;width:210mm!important;}
   body *{visibility:hidden!important;}
-  #printArea{visibility:visible!important;display:block!important;position:fixed!important;top:0!important;left:0!important;width:210mm!important;background:white!important;z-index:99999!important;margin:0!important;padding:0!important;}
+  #app,#loginScreen,.twrap{display:none!important;}
+  #printArea{visibility:visible!important;display:block!important;position:absolute!important;top:0!important;left:0!important;width:100%!important;background:white!important;z-index:99999!important;margin:0!important;padding:0!important;}
   #printArea *{visibility:visible!important;}
   .pgbreak{page-break-after:always!important;break-after:page!important;}
 }
@@ -4220,6 +4221,252 @@ function segnaOrdPagato(ordId, dataPag){
 // ══════════════════════════════════════════════════════
 // NOVAS PÁGINAS — serão implementadas nas fases seguintes
 // ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// DASHBOARD FINANZIARIO
+// ══════════════════════════════════════════════════════
+function pgFindash(el){
+  var vs       = getVouchers();
+  var ordini   = getOrdini();
+  var liqs     = getLiquidazioni();
+  var cs       = getClienti();
+  var pdvs     = getPdv();
+  var oggi     = today();
+
+  // ── MÉTRICAS ORDINI
+  var totEmesso    = ordini.reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totPagato    = ordini.filter(function(o){return o.pagato;}).reduce(function(s,o){return s+parseFloat(o.totale||0);},0);
+  var totDovuto    = totEmesso - totPagato;
+  var nOrdini      = ordini.length;
+  var nPagati      = ordini.filter(function(o){return o.pagato;}).length;
+  var nAperti      = nOrdini - nPagati;
+  var pctIncassato = totEmesso>0 ? Math.round(totPagato/totEmesso*100) : 0;
+
+  // ── MÉTRICAS VOUCHER
+  var totValoreEmesso = vs.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
+  var totSaldoAtivo   = vs.filter(function(v){var st=vSt(v);return st==='valid'||st==='partial';}).reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
+  var totUsato        = vs.reduce(function(s,v){return s+parseFloat(v.amt||0)-parseFloat(v.bal||0);},0);
+
+  // ── MÉTRICAS PdV
+  var totRecPdv = 0, totLiqPdv = 0;
+  pdvs.forEach(function(p){
+    vs.forEach(function(v){
+      (v.tx||[]).forEach(function(t){if(t.pdvId===p.id) totRecPdv+=parseFloat(t.amt||0);});
+      if(v.usedPdvId===p.id && (!v.tx||!v.tx.length)) totRecPdv+=parseFloat(v.amt||0);
+    });
+  });
+  totLiqPdv = liqs.reduce(function(s,l){return s+parseFloat(l.valor||0);},0);
+  var saldoPdv = totRecPdv - totLiqPdv;
+
+  // ── EVOLUÇÃO MENSAL (últimos 6 meses)
+  var mesi = [];
+  for(var m=5;m>=0;m--){
+    var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-m);
+    var ym = d.toISOString().substring(0,7);
+    var nome = d.toLocaleString('it-IT',{month:'short'}).toUpperCase();
+    var emesso=0, pagato=0, usato=0;
+    ordini.forEach(function(o){
+      if((o.data||'').startsWith(ym)){
+        emesso += parseFloat(o.totale||0);
+        if(o.pagato) pagato += parseFloat(o.totale||0);
+      }
+    });
+    vs.forEach(function(v){
+      (v.tx||[]).forEach(function(t){
+        if((t.date||'').startsWith(ym)) usato+=parseFloat(t.amt||0);
+      });
+    });
+    mesi.push({nome:nome, emesso:emesso, pagato:pagato, usato:usato});
+  }
+  var maxBar = Math.max(1, Math.max.apply(null, mesi.map(function(m){return Math.max(m.emesso,m.pagato,m.usato);})));
+
+  // ── SCOPERTO PER CLIENTE
+  var scoperto = {};
+  ordini.filter(function(o){return !o.pagato;}).forEach(function(o){
+    var k = o.clienteId||'?';
+    if(!scoperto[k]) scoperto[k]={nome:o.clienteNome||'—',tot:0,n:0};
+    scoperto[k].tot += parseFloat(o.totale||0);
+    scoperto[k].n++;
+  });
+  var scopertoArr = Object.values(scoperto).sort(function(a,b){return b.tot-a.tot;});
+
+  // ── ÚLTIMAS TRANSACÇÕES
+  var ultimeTx = [];
+  vs.forEach(function(v){
+    (v.tx||[]).forEach(function(t){
+      ultimeTx.push({vid:v.id, nome:v.name||'—', amt:parseFloat(t.amt||0), date:t.date, by:t.by||'—', pdv:t.pdvNome||'—'});
+    });
+  });
+  ultimeTx.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  ultimeTx = ultimeTx.slice(0,10);
+
+  // ── SVG GRÁFICO
+  var bW=28, gap=6, gW=(bW*3+gap*2+16)*6, gH=90;
+  var svgBars = mesi.map(function(m,i){
+    var x = i*(bW*3+gap*2+20);
+    var hE = m.emesso>0 ? Math.max(4, Math.round(m.emesso/maxBar*gH)) : 0;
+    var hP = m.pagato>0 ? Math.max(4, Math.round(m.pagato/maxBar*gH)) : 0;
+    var hU = m.usato>0  ? Math.max(4, Math.round(m.usato/maxBar*gH))  : 0;
+    return '<rect x="'+(x)+'" y="'+(gH-hE)+'" width="'+bW+'" height="'+hE+'" fill="#003DA5" rx="3" opacity=".85"/>'
+      +'<rect x="'+(x+bW+gap)+'" y="'+(gH-hP)+'" width="'+bW+'" height="'+hP+'" fill="#059669" rx="3" opacity=".85"/>'
+      +'<rect x="'+(x+bW*2+gap*2)+'" y="'+(gH-hU)+'" width="'+bW+'" height="'+hU+'" fill="#D97706" rx="3" opacity=".85"/>'
+      +'<text x="'+(x+bW*1.5+gap)+'" y="'+(gH+13)+'" text-anchor="middle" font-size="9" fill="#9CA3AF">'+m.nome+'</text>';
+  }).join('');
+
+  // ── RENDER
+  el.innerHTML =
+    '<div class="ph"><div class="ph-ic">&#128178;</div>'
+    +'<div class="ph-tx"><h2>Dashboard Finanziario</h2><p>Panoramica completa — entrate, incassi, liquidazioni e flusso di cassa</p></div></div>'
+
+    // ── KPIs PRINCIPAL (6 KPIs)
+    +'<div class="sgrid" style="grid-template-columns:repeat(6,1fr);margin-bottom:18px;">'
+      +'<div class="scard bl"><div class="sl">Fatturato Totale</div><div class="sv">\u20ac'+totEmesso.toFixed(0)+'</div><div class="ss">'+nOrdini+' ordini emessi</div></div>'
+      +'<div class="scard" style="border-left:3px solid #059669;"><div class="sl">Incassato</div><div class="sv" style="color:#059669;">\u20ac'+totPagato.toFixed(0)+'</div><div class="ss">'+nPagati+' pagati ('+pctIncassato+'%)</div></div>'
+      +'<div class="scard" style="border-left:3px solid '+(totDovuto>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">Da Incassare</div>'
+        +'<div class="sv" style="color:'+(totDovuto>0?'#D97706':'#059669')+';">\u20ac'+totDovuto.toFixed(0)+'</div>'
+        +'<div class="ss">'+nAperti+' ordini aperti</div>'
+      +'</div>'
+      +'<div class="scard"><div class="sl">Valore Voucher</div><div class="sv">\u20ac'+totValoreEmesso.toFixed(0)+'</div><div class="ss">emesso totale</div></div>'
+      +'<div class="scard" style="border-left:3px solid #003DA5;"><div class="sl">Saldo Attivo</div><div class="sv" style="color:#003DA5;">\u20ac'+totSaldoAtivo.toFixed(0)+'</div><div class="ss">ancora utilizzabile</div></div>'
+      +'<div class="scard" style="border-left:3px solid '+(saldoPdv>0?'#D97706':'#059669')+';">'
+        +'<div class="sl">Debito PdV</div>'
+        +'<div class="sv" style="color:'+(saldoPdv>0?'#D97706':'#059669')+';">\u20ac'+saldoPdv.toFixed(0)+'</div>'
+        +'<div class="ss">'+(saldoPdv>0?'da liquidare':'in pari')+'</div>'
+      +'</div>'
+    +'</div>'
+
+    // ── BARRA PROGRESSO INCASSATO
+    +'<div class="card" style="margin-bottom:18px;">'
+      +'<div style="padding:14px 18px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+          +'<div style="font-size:12px;font-weight:700;color:var(--gmd);">Progresso Incassi</div>'
+          +'<div style="font-size:20px;font-weight:900;color:#003DA5;">'+pctIncassato+'%</div>'
+        +'</div>'
+        +'<div class="pbar" style="height:10px;border-radius:5px;">'
+          +'<div class="pfill'+(pctIncassato<50?' danger':pctIncassato<80?' warn':'')+'" style="width:'+pctIncassato+'%;border-radius:5px;transition:width .5s;"></div>'
+        +'</div>'
+        +'<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--gr);">'
+          +'<span>Incassato: \u20ac'+totPagato.toFixed(2)+'</span>'
+          +'<span>Da incassare: \u20ac'+totDovuto.toFixed(2)+'</span>'
+          +'<span>Totale: \u20ac'+totEmesso.toFixed(2)+'</span>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
+
+    // ── GRÁFICO + SCOPERTO (2 colunas)
+    +'<div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:18px;">'
+
+      // Gráfico evolução mensal
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128200; Evoluzione Mensile</h3></div>'
+        +'<div style="padding:16px;">'
+          +'<div style="display:flex;gap:14px;margin-bottom:12px;font-size:11px;">'
+            +'<span><span style="display:inline-block;width:10px;height:10px;background:#003DA5;border-radius:2px;margin-right:4px;"></span>Emesso</span>'
+            +'<span><span style="display:inline-block;width:10px;height:10px;background:#059669;border-radius:2px;margin-right:4px;"></span>Incassato</span>'
+            +'<span><span style="display:inline-block;width:10px;height:10px;background:#D97706;border-radius:2px;margin-right:4px;"></span>Utilizzato</span>'
+          +'</div>'
+          +'<svg viewBox="0 0 '+(gW+10)+' '+(gH+20)+'" style="width:100%;height:auto;">'+svgBars+'</svg>'
+        +'</div>'
+      +'</div>'
+
+      // Scoperto per cliente
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128308; Scoperto per Cliente</h3>'
+          +'<button class="btn btn-out btn-sm" onclick="goPage(\'finance\')">Gestisci &rarr;</button>'
+        +'</div>'
+        +(scopertoArr.length===0
+          ? '<div style="padding:24px;text-align:center;font-size:12px;color:#059669;">&#127881; Nessun cliente in scoperto</div>'
+          : scopertoArr.map(function(c){
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--gbd);">'
+                +'<div>'
+                  +'<div style="font-size:12px;font-weight:600;">'+escH(c.nome)+'</div>'
+                  +'<div style="font-size:10px;color:var(--gr);">'+c.n+' ordini non pagati</div>'
+                +'</div>'
+                +'<div style="font-size:15px;font-weight:800;color:#D97706;">\u20ac'+c.tot.toFixed(2)+'</div>'
+              +'</div>';
+            }).join('')
+        )
+      +'</div>'
+    +'</div>'
+
+    // ── PdV LIQUIDAZIONI + ULTIME TRANSAZIONI (2 colunas)
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">'
+
+      // PdV Liquidazioni
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128260; Stato Liquidazioni PdV</h3>'
+          +'<button class="btn btn-out btn-sm" onclick="goPage(\'liquidazioni\')">Gestisci &rarr;</button>'
+        +'</div>'
+        +'<div style="padding:14px 16px;">'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;margin-bottom:12px;">'
+            +'<div><div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;">Ricevuto</div><div style="font-size:18px;font-weight:800;color:#003DA5;">\u20ac'+totRecPdv.toFixed(0)+'</div></div>'
+            +'<div><div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;">Liquidato</div><div style="font-size:18px;font-weight:800;color:#059669;">\u20ac'+totLiqPdv.toFixed(0)+'</div></div>'
+            +'<div><div style="font-size:9px;font-weight:700;color:var(--gr);text-transform:uppercase;">Da Liquidare</div><div style="font-size:18px;font-weight:800;color:'+(saldoPdv>0?'#D97706':'#059669')+';">\u20ac'+saldoPdv.toFixed(0)+'</div></div>'
+          +'</div>'
+          +'<div class="pbar"><div class="pfill'+(saldoPdv>0?' warn':'')+'" style="width:'+(totRecPdv>0?Math.round(totLiqPdv/totRecPdv*100):100)+'%;"></div></div>'
+        +'</div>'
+      +'</div>'
+
+      // Ultime transazioni
+      +'<div class="card">'
+        +'<div class="card-hd"><h3>&#128176; Ultime Transazioni</h3></div>'
+        +(ultimeTx.length===0
+          ? '<div style="padding:24px;text-align:center;font-size:12px;color:var(--gr);">Nessuna transazione registrata</div>'
+          : '<div style="max-height:200px;overflow-y:auto;">'+ultimeTx.map(function(tx){
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--gbd);font-size:12px;">'
+                +'<div>'
+                  +'<span class="mono fw7" style="font-size:11px;color:#003DA5;">'+escH(tx.vid)+'</span>'
+                  +' <span style="color:var(--gr);">'+escH(tx.nome)+'</span>'
+                +'</div>'
+                +'<div style="text-align:right;">'
+                  +'<div style="font-weight:700;color:#059669;">\u20ac'+tx.amt.toFixed(2)+'</div>'
+                  +'<div style="font-size:10px;color:var(--gr);">'+fmtDate(tx.date)+'</div>'
+                +'</div>'
+              +'</div>';
+            }).join('')+'</div>'
+        )
+      +'</div>'
+    +'</div>'
+
+    // ── RIEPILOGO RAPIDO (tabela resumo por cliente)
+    +'<div class="card">'
+      +'<div class="card-hd"><h3>&#128202; Riepilogo per Cliente</h3></div>'
+      +'<table><thead><tr>'
+        +'<th>Cliente</th><th style="text-align:right;">N\u00b0 Ordini</th><th style="text-align:right;">Emesso</th>'
+        +'<th style="text-align:right;">Pagato</th><th style="text-align:right;">Scoperto</th><th>Stato</th>'
+      +'</tr></thead><tbody>'
+      +(function(){
+        var perCl = {};
+        ordini.forEach(function(o){
+          var k = o.clienteId||'?';
+          if(!perCl[k]) perCl[k]={nome:o.clienteNome||'—',n:0,emesso:0,pagato:0};
+          perCl[k].n++;
+          perCl[k].emesso += parseFloat(o.totale||0);
+          if(o.pagato) perCl[k].pagato += parseFloat(o.totale||0);
+        });
+        var arr = Object.values(perCl).sort(function(a,b){return b.emesso-a.emesso;});
+        if(!arr.length) return '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gr);">Nessun ordine registrato</td></tr>';
+        return arr.map(function(c){
+          var scoperto = c.emesso - c.pagato;
+          var pct = c.emesso>0 ? Math.round(c.pagato/c.emesso*100) : 100;
+          var badge = scoperto < 0.01
+            ? '<span class="badge valid">In pari</span>'
+            : '<span class="badge partial">\u20ac'+scoperto.toFixed(2)+' aperto</span>';
+          return '<tr>'
+            +'<td class="fw7">'+escH(c.nome)+'</td>'
+            +'<td style="text-align:right;">'+c.n+'</td>'
+            +'<td style="text-align:right;">\u20ac'+c.emesso.toFixed(2)+'</td>'
+            +'<td style="text-align:right;color:#059669;font-weight:600;">\u20ac'+c.pagato.toFixed(2)+'</td>'
+            +'<td style="text-align:right;color:'+(scoperto>0?'#D97706':'#059669')+';font-weight:700;">\u20ac'+scoperto.toFixed(2)+'</td>'
+            +'<td>'+badge+'</td>'
+          +'</tr>';
+        }).join('');
+      })()
+      +'</tbody></table>'
+    +'</div>';
+}
+
 function pgLiquidazioni(el){
   _pgLiqEl = el;
   renderLiqFull();
@@ -4559,6 +4806,7 @@ function renderRepVoucher(c){
     {id:'stato',          lbl:'Stato'},
     {id:'pdv',            lbl:'PdV Autorizzati'},
     {id:'note',           lbl:'Note'},
+    {id:'tot_benef',     lbl:'Tot. Beneficiario'},
   ];
   var campiHtml = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;">'
     + campiConf.map(function(f){
@@ -4592,6 +4840,13 @@ function renderRepVoucher(c){
     }
     if(campiChecked.pdv)  cells += '<td style="font-size:10px;color:var(--gr);">'+(v.pdvs&&v.pdvs.length?v.pdvs.join(', '):'Tutti')+'</td>';
     if(campiChecked.note) cells += '<td style="font-size:11px;color:var(--gr);">'+escH(v.notes||'—')+'</td>';
+    if(campiChecked.tot_benef){
+      // Calcular total emitido para este beneficiário
+      var benefName = (v.name||'').toLowerCase().trim();
+      var totBenef = lista.filter(function(vb){return (vb.name||'').toLowerCase().trim()===benefName;})
+        .reduce(function(s,vb){return s+parseFloat(vb.amt||0);},0);
+      cells += '<td style="text-align:right;font-weight:700;color:#003DA5;">\u20ac'+totBenef.toFixed(2)+'</td>';
+    }
     return '<tr>'+cells+'</tr>';
   }).join('');
 
@@ -4658,94 +4913,167 @@ function exportRepVoucherCSV(){
 }
 
 function stampaRepVoucher(){
-  var vs = getVouchers();
-  var filtCl = (document.getElementById('rv_cl')||{}).value||'';
-  var filtSt = (document.getElementById('rv_st')||{}).value||'';
-  var filtDa = (document.getElementById('rv_da')||{}).value||'';
-  var filtA  = (document.getElementById('rv_a')||{}).value||'';
-  if(filtCl) vs = vs.filter(function(v){return v.clienteId===filtCl;});
-  if(filtSt) vs = vs.filter(function(v){return vSt(v)===filtSt;});
-  if(filtDa) vs = vs.filter(function(v){return v.created>=filtDa;});
-  if(filtA)  vs = vs.filter(function(v){return v.created<=filtA;});
+  try {
+    var vs = getVouchers();
+    var filtCl = (document.getElementById('rv_cl')||{}).value||'';
+    var filtSt = (document.getElementById('rv_st')||{}).value||'';
+    var filtDa = (document.getElementById('rv_da')||{}).value||'';
+    var filtA  = (document.getElementById('rv_a')||{}).value||'';
+    if(filtCl) vs = vs.filter(function(v){return v.clienteId===filtCl;});
+    if(filtSt) vs = vs.filter(function(v){return vSt(v)===filtSt;});
+    if(filtDa) vs = vs.filter(function(v){return v.created>=filtDa;});
+    if(filtA)  vs = vs.filter(function(v){return v.created<=filtA;});
 
-  var cl = filtCl ? getClienti().find(function(c){return c.id===filtCl;}) : null;
-  var clNome = cl ? (cl.rag||cl.nome) : 'Tutti i clienti';
+    var cl = filtCl ? getClienti().find(function(c){return c.id===filtCl;}) : null;
+    var clNome = cl ? (cl.rag||cl.nome) : 'Tutti i clienti';
 
-  // Campi a includere
-  var campi = ['numero','cliente','beneficiario','data_emissione','data_scadenza','valore','saldo','carburante','stato'];
-  var campiAtivi = campi.filter(function(k){
-    var el=document.getElementById('rc_'+k); return !el||el.checked;
-  });
-  var lbl={numero:'N° Voucher',cliente:'Cliente',beneficiario:'Beneficiario',
-    data_emissione:'Data Emissione',data_scadenza:'Scadenza',
-    valore:'Valore',saldo:'Saldo',carburante:'Carburante',stato:'Stato'};
-
-  var thCells = campiAtivi.map(function(k){return '<th style="background:#003DA5;color:#fff;padding:7px 10px;font-size:10px;text-align:left;letter-spacing:.05em;">'+lbl[k]+'</th>';}).join('');
-
-  var rows = vs.map(function(v){
-    var st = vSt(v);
-    var vcl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
-    var stColor={valid:'#059669',partial:'#D97706',used:'#6B7280',expired:'#DC2626'};
-    var stLbl={valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
-    var cells = '';
-    campiAtivi.forEach(function(k){
-      if(k==='numero')         cells+='<td style="font-family:monospace;font-size:11px;font-weight:700;color:#003DA5;padding:6px 10px;">'+escH(v.id)+'</td>';
-      if(k==='cliente')        cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(vcl.rag||vcl.nome||'—')+'</td>';
-      if(k==='beneficiario')   cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(v.name||'—')+'</td>';
-      if(k==='data_emissione') cells+='<td style="padding:6px 10px;font-size:11px;">'+fmtDate(v.created)+'</td>';
-      if(k==='data_scadenza')  cells+='<td style="padding:6px 10px;font-size:11px;">'+fmtDate(v.exp)+'</td>';
-      if(k==='valore')         cells+='<td style="padding:6px 10px;font-size:11px;text-align:right;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
-      if(k==='saldo')          cells+='<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
-      if(k==='carburante')     cells+='<td style="padding:6px 10px;font-size:11px;">'+escH(v.fuel||'—')+'</td>';
-      if(k==='stato')          cells+='<td style="padding:6px 10px;"><span style="background:'+(stColor[st]||'#6B7280')+'22;color:'+(stColor[st]||'#6B7280')+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'+(stLbl[st]||st)+'</span></td>';
+    // Campi seleccionados
+    var campi = ['numero','cliente','beneficiario','data_emissione','data_scadenza','valore','saldo','carburante','stato','note','tot_benef'];
+    var campiAtivi = campi.filter(function(k){
+      var el = document.getElementById('rc_'+k);
+      return el ? el.checked : false;
     });
-    return '<tr style="border-bottom:1px solid #E5E7EB;">'+cells+'</tr>';
-  }).join('');
 
-  var totValore = vs.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
-  var totSaldo  = vs.reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
+    if(campiAtivi.length===0){
+      showToast('Seleziona almeno un campo per il report','err');
+      return;
+    }
 
-  var pa = document.getElementById('printArea');
-  pa.style.display='block';
-  pa.innerHTML =
-    '<div style="padding:20px;font-family:Inter,Arial,sans-serif;max-width:210mm;">'
-    // Cabeçalho FuelPass
-    +'<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #003DA5;margin-bottom:16px;">'
-      +'<div style="display:flex;align-items:center;gap:12px;">'
-        +'<div style="background:#003DA5;color:#fff;border-radius:8px;padding:8px 14px;font-size:18px;font-weight:900;letter-spacing:.05em;">FP</div>'
-        +'<div>'
-          +'<div style="font-size:20px;font-weight:800;color:#003DA5;">FuelPass</div>'
-          +'<div style="font-size:10px;color:#6B7280;letter-spacing:.08em;text-transform:uppercase;">Gestione Buoni Carburante — Carburante Dolomite</div>'
+    var lbl = {
+      numero:'N\u00b0 Voucher', cliente:'Cliente', beneficiario:'Beneficiario',
+      data_emissione:'Data Emissione', data_scadenza:'Scadenza',
+      valore:'Valore', saldo:'Saldo', carburante:'Carburante',
+      stato:'Stato', note:'Note', tot_benef:'Tot. Beneficiario'
+    };
+
+    // Header da tabela
+    var thCells = campiAtivi.map(function(k){
+      return '<th style="background:#003DA5;color:#fff;padding:7px 10px;font-size:10px;text-align:left;letter-spacing:.05em;">'+lbl[k]+'</th>';
+    }).join('');
+
+    // Linhas da tabela
+    var rows = vs.map(function(v){
+      var st = vSt(v);
+      var vcl = getClienti().find(function(c){return c.id===v.clienteId;})||{};
+      var stColor = {valid:'#059669',partial:'#D97706',used:'#6B7280',expired:'#DC2626'};
+      var stLbl = {valid:'Valido',partial:'Parziale',used:'Usato',expired:'Scaduto'};
+      var cells = '';
+      campiAtivi.forEach(function(k){
+        var td = '<td style="padding:6px 10px;font-size:11px;border-bottom:1px solid #E5E7EB;">';
+        if(k==='numero')         cells += td+'<span style="font-family:monospace;font-weight:700;color:#003DA5;">'+escH(v.id)+'</span></td>';
+        if(k==='cliente')        cells += td+escH(vcl.rag||vcl.nome||'\u2014')+'</td>';
+        if(k==='beneficiario')   cells += td+escH(v.name||'\u2014')+'</td>';
+        if(k==='data_emissione') cells += td+fmtDate(v.created)+'</td>';
+        if(k==='data_scadenza')  cells += td+fmtDate(v.exp)+'</td>';
+        if(k==='valore')         cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;border-bottom:1px solid #E5E7EB;">\u20ac'+parseFloat(v.amt||0).toFixed(2)+'</td>';
+        if(k==='saldo')          cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #E5E7EB;">\u20ac'+parseFloat(v.bal||0).toFixed(2)+'</td>';
+        if(k==='carburante')     cells += td+escH(v.fuel||'\u2014')+'</td>';
+        if(k==='stato')          cells += td+'<span style="background:'+(stColor[st]||'#6B7280')+'22;color:'+(stColor[st]||'#6B7280')+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">'+(stLbl[st]||st)+'</span></td>';
+        if(k==='note')           cells += td+'<span style="color:#6B7280;">'+escH(v.notes||'\u2014')+'</span></td>';
+        if(k==='tot_benef'){
+          var bn = (v.name||'').toLowerCase().trim();
+          var tb = vs.filter(function(x){return (x.name||'').toLowerCase().trim()===bn;}).reduce(function(s,x){return s+parseFloat(x.amt||0);},0);
+          cells += '<td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:700;color:#003DA5;border-bottom:1px solid #E5E7EB;">\u20ac'+tb.toFixed(2)+'</td>';
+        }
+      });
+      return '<tr>'+cells+'</tr>';
+    }).join('');
+
+    // Totais
+    var totValore = vs.reduce(function(s,v){return s+parseFloat(v.amt||0);},0);
+    var totSaldo  = vs.reduce(function(s,v){return s+parseFloat(v.bal||0);},0);
+
+    // Subtotais por beneficiário (se campo activo)
+    var subtotHTML = '';
+    if(campiAtivi.indexOf('tot_benef') > -1){
+      var perBenef = {};
+      vs.forEach(function(v){
+        var bn = (v.name||'\u2014').trim();
+        if(!perBenef[bn]) perBenef[bn] = {n:0, tot:0, saldo:0};
+        perBenef[bn].n++;
+        perBenef[bn].tot += parseFloat(v.amt||0);
+        perBenef[bn].saldo += parseFloat(v.bal||0);
+      });
+      var bArr = Object.keys(perBenef).sort();
+      subtotHTML = '<div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;border-bottom:2px solid #003DA5;padding-bottom:4px;">Riepilogo per Beneficiario</div>'
+        +'<table style="width:100%;border-collapse:collapse;">'
+        +'<thead><tr><th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:left;color:#003DA5;">Beneficiario</th>'
+        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:center;color:#003DA5;">N\u00b0 Voucher</th>'
+        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:right;color:#003DA5;">Totale Emesso</th>'
+        +'<th style="background:#EBF1FB;padding:6px 10px;font-size:10px;text-align:right;color:#003DA5;">Saldo Residuo</th>'
+        +'</tr></thead><tbody>'
+        + bArr.map(function(bn){
+            var d = perBenef[bn];
+            return '<tr style="border-bottom:1px solid #E5E7EB;">'
+              +'<td style="padding:5px 10px;font-size:11px;font-weight:600;">'+escH(bn)+'</td>'
+              +'<td style="padding:5px 10px;font-size:11px;text-align:center;">'+d.n+'</td>'
+              +'<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;">\u20ac'+d.tot.toFixed(2)+'</td>'
+              +'<td style="padding:5px 10px;font-size:11px;text-align:right;color:#059669;">\u20ac'+d.saldo.toFixed(2)+'</td>'
+            +'</tr>';
+          }).join('')
+        +'<tr style="background:#EBF1FB;font-weight:800;">'
+          +'<td style="padding:6px 10px;font-size:11px;">TOTALE</td>'
+          +'<td style="padding:6px 10px;font-size:11px;text-align:center;">'+vs.length+'</td>'
+          +'<td style="padding:6px 10px;font-size:11px;text-align:right;">\u20ac'+totValore.toFixed(2)+'</td>'
+          +'<td style="padding:6px 10px;font-size:11px;text-align:right;color:#059669;">\u20ac'+totSaldo.toFixed(2)+'</td>'
+        +'</tr>'
+        +'</tbody></table></div>';
+    }
+
+    // Montar o printArea
+    var pa = document.getElementById('printArea');
+    pa.innerHTML = '';
+    pa.style.display = 'block';
+    pa.innerHTML =
+      '<div style="padding:20px;font-family:Inter,Arial,sans-serif;max-width:210mm;color:#1F2937;">'
+      // Header
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #003DA5;margin-bottom:16px;">'
+        +'<div style="display:flex;align-items:center;gap:12px;">'
+          +'<div style="background:#003DA5;color:#fff;border-radius:8px;padding:8px 14px;font-size:18px;font-weight:900;letter-spacing:.05em;">FP</div>'
+          +'<div>'
+            +'<div style="font-size:20px;font-weight:800;color:#003DA5;">FuelPass</div>'
+            +'<div style="font-size:10px;color:#6B7280;letter-spacing:.08em;text-transform:uppercase;">Gestione Buoni Carburante \u2014 Carburante Dolomite</div>'
+          +'</div>'
+        +'</div>'
+        +'<div style="text-align:right;">'
+          +'<div style="font-size:13px;font-weight:700;color:#1F2937;">Report Voucher Emessi</div>'
+          +'<div style="font-size:11px;color:#6B7280;">Data: '+fmtDate(today())+'</div>'
         +'</div>'
       +'</div>'
-      +'<div style="text-align:right;">'
-        +'<div style="font-size:13px;font-weight:700;color:#1F2937;">Report Voucher Emessi</div>'
-        +'<div style="font-size:11px;color:#6B7280;">Data: '+fmtDate(today())+'</div>'
+      // Info cliente
+      +'<div style="background:#EBF1FB;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">'
+        +'<div>'
+          +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;">Cliente</div>'
+          +'<div style="font-size:16px;font-weight:700;">'+escH(clNome)+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;font-size:11px;color:#6B7280;">'
+          +vs.length+' voucher | Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> | Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong>'
+        +'</div>'
       +'</div>'
-    +'</div>'
-    // Subtítulo cliente
-    +'<div style="background:#EBF1FB;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">'
-      +'<div>'
-        +'<div style="font-size:10px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.08em;">Cliente</div>'
-        +'<div style="font-size:16px;font-weight:700;">'+escH(clNome)+'</div>'
+      // Tabela
+      +'<table style="width:100%;border-collapse:collapse;">'
+        +'<thead><tr>'+thCells+'</tr></thead>'
+        +'<tbody>'+rows+'</tbody>'
+      +'</table>'
+      // Subtotais por beneficiário
+      + subtotHTML
+      // Footer
+      +'<div style="margin-top:16px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:10px;color:#9CA3AF;text-align:center;">'
+        +'FuelPass \u2014 Carburante Dolomite / Enilive | Documento generato il '+fmtDate(today())+' | Riservato e confidenziale'
       +'</div>'
-      +'<div style="text-align:right;">'
-        +'<div style="font-size:11px;color:#6B7280;">'+vs.length+' voucher &nbsp;|&nbsp; Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong></div>'
-      +'</div>'
-    +'</div>'
-    // Tabela
-    +'<table style="width:100%;border-collapse:collapse;">'
-      +'<thead><tr>'+thCells+'</tr></thead>'
-      +'<tbody>'+rows+'</tbody>'
-    +'</table>'
-    +'<div style="margin-top:16px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:10px;color:#9CA3AF;text-align:center;">'
-      +'FuelPass — Carburante Dolomite / Enilive &nbsp;|&nbsp; Documento generato il '+fmtDate(today())+' &nbsp;|&nbsp; Riservato e confidenziale'
-    +'</div>'
-    +'</div>';
+      +'</div>';
 
-  window.print();
-  setTimeout(function(){ pa.style.display='none'; pa.innerHTML=''; },1000);
+    // Aguardar renderização e imprimir
+    setTimeout(function(){
+      window.print();
+      setTimeout(function(){ pa.style.display='none'; pa.innerHTML=''; }, 2000);
+    }, 300);
+  } catch(err) {
+    console.error('Errore stampa PDF:', err);
+    showToast('Errore generazione PDF: '+err.message, 'err');
+  }
 }
+
 
 // ══════════════════════════════════════════════════════
 // RELATÓRIO 2 — STORICO UTILIZZI
