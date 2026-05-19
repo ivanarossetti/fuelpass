@@ -3414,7 +3414,7 @@ function printVouchers(vouchers,saveAsPdf){
         } else {
           // Garantir que o printArea está visível e renderizado antes de imprimir
           pa.style.cssText='display:block!important;position:fixed!important;top:0!important;left:0!important;width:210mm!important;z-index:99999!important;background:white!important;';
-          // Aguardar mais tempo para garantir render completo
+          // Aguardar MAIS tempo para garantir render completo (800ms em vez de tempo insuficiente)
           setTimeout(function(){
             window.print();
             // Limpar após impressão
@@ -3433,7 +3433,7 @@ function printVouchers(vouchers,saveAsPdf){
                 pa.innerHTML='';
               }
             }, 5000);
-          }, 800);
+          }, 1500);
         }
       },500);
       return;
