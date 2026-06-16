@@ -1926,8 +1926,8 @@ function pgVouchers(el){
     +'<div class="tab '+(_vf==='expired'?'active':'')+'" onclick="setVF(\'expired\',this)">Scaduti ('+cnt.expired+')</div>'
     +'</div>'
     +'<div class="swrap"><input id="vsrch" placeholder="Cerca codice, nome..." oninput="renderVT()"/></div>'
-    +'<div style="display:flex;align-items:center;gap:6px;">'\n      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'\n        +'<option value="all">Tutte le stazioni</option>'\n        +getStazioni().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')\n      +'</select>'\n    +"</div>"
     +'<div style="display:flex;align-items:center;gap:6px;">'
+      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;"><option value="all">Tutte le stazioni</option>'+getStazioni().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')+'</select>'
       +'<select id="vSortSel" onchange="sortVSel()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'
         +'<option value="id_asc">N\u00b0 Codice \u2191</option>'
         +'<option value="id_desc">N\u00b0 Codice \u2193</option>'
