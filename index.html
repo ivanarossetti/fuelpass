@@ -1162,11 +1162,20 @@ function setClienti(arr){
   sbUpsert('clienti', sbArr).catch(function(e){console.warn('sync cl',e);});
 }
 function setStazioni(arr){
+  // Remover logo do array antes de salvar (tamanho muito grande)
+  var arrSemLogo = arr.map(function(s){
+    var copy = {};
+    for(var key in s) {
+      if(key !== 'logo') copy[key] = s[key];
+    }
+    return copy;
+  });
+  
   _cache.stazioni=arr.slice();
-  // Salvar no localStorage para persistência
+  // Salvar no localStorage para persistência (sem logo)
   try {
-    localStorage.setItem('fuelpass_stazioni', JSON.stringify(arr));
-    console.log('✅ Stazioni salvas localmente');
+    localStorage.setItem('fuelpass_stazioni', JSON.stringify(arrSemLogo));
+    console.log('✅ Stazioni salvas localmente (sem logo)');
   } catch(e) {
     console.warn('localStorage indisponível:', e);
   }
