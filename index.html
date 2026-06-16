@@ -1167,13 +1167,9 @@ function setStazioni(arr){
     return {
       id: s.id,
       nome: s.nome||'',
-      rag: s.rag||'',
       piva: s.piva||'',
       ind: s.ind||'',
-      cit: s.cit||'',
-      tel: s.tel||'',
-      email: s.email||'',
-      logo: s.logo||null
+      tel: s.tel||''
     };
   });
   sbUpsert('stazioni', sbArr).catch(function(e){console.warn('sync st',e);});
