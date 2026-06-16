@@ -1177,14 +1177,18 @@ function setStazioni(arr){
 }
 
 function loadStazioniFromLocal(){
-  try {
-    var stored = localStorage.getItem('fuelpass_stazioni');
-    if(stored){
-      _cache.stazioni = JSON.parse(stored);
-      console.log('✅ Stazioni carregadas do localStorage');
+  // Apenas usa localStorage como BACKUP se não houver dados do Supabase
+  // Não sobrescreve dados recém-carregados do Supabase
+  if(!_cache.stazioni || _cache.stazioni.length === 0){
+    try {
+      var stored = localStorage.getItem('fuelpass_stazioni');
+      if(stored){
+        _cache.stazioni = JSON.parse(stored);
+        console.log('✅ Stazioni restauradas do localStorage (backup)');
+      }
+    } catch(e) {
+      console.warn('Erro ao carregar stazioni local:', e);
     }
-  } catch(e) {
-    console.warn('Erro ao carregar stazioni local:', e);
   }
 }
 function setPdv(arr){
@@ -1922,6 +1926,7 @@ function pgVouchers(el){
     +'<div class="tab '+(_vf==='expired'?'active':'')+'" onclick="setVF(\'expired\',this)">Scaduti ('+cnt.expired+')</div>'
     +'</div>'
     +'<div class="swrap"><input id="vsrch" placeholder="Cerca codice, nome..." oninput="renderVT()"/></div>'
+    +'<div style="display:flex;align-items:center;gap:6px;">'\n      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'\n        +'<option value="all">Tutte le stazioni</option>'\n        +getStazioni().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')\n      +'</select>'\n    +"</div>"
     +'<div style="display:flex;align-items:center;gap:6px;">'
       +'<select id="vSortSel" onchange="sortVSel()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'
         +'<option value="id_asc">N\u00b0 Codice \u2191</option>'
@@ -1967,6 +1972,7 @@ function pgVouchers(el){
 }
 
 function setVF(f,el){_vf=f;document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});el.classList.add('active');renderVT();}
+function filterByStazione(){var sel=document.getElementById('vStazioneSel');if(sel)_vStazione=sel.value;renderVT();}
 function renderVT(){var tb=document.getElementById('vtbody');if(tb)tb.innerHTML=filtVRows();}
 
 
@@ -2065,6 +2071,7 @@ function filtVRows(){
     }
   });
   if(_vf!=='all')vs=vs.filter(function(v){return vSt(v)===_vf;});
+  if(_vStazione!=='all')vs=vs.filter(function(v){return v.emitId===_vStazione;});
   if(q)vs=vs.filter(function(v){return v.id.toLowerCase().indexOf(q)>-1||v.name.toLowerCase().indexOf(q)>-1||stazioneName(v.emitId).toLowerCase().indexOf(q)>-1||clienteName(v.clienteId).toLowerCase().indexOf(q)>-1;});
   if(!vs.length)return '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher trovato</td></tr>';
   return vs.map(function(v){
