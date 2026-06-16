@@ -1172,7 +1172,16 @@ function setStazioni(arr){
       tel: s.tel||''
     };
   });
-  sbUpsert('stazioni', sbArr).catch(function(e){console.warn('sync st',e);});
+  
+  sbUpsert('stazioni', sbArr)
+    .then(function(r){
+      console.log('✅ Stazioni sincronizzate com sucesso');
+      return r.ok ? r : Promise.reject(new Error('Response status '+r.status));
+    })
+    .catch(function(e){
+      console.error('❌ ERRO ao sincronizar stazioni:', e);
+      showToast('Erro ao salvar no Supabase: '+e.message, 'err');
+    });
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
@@ -5947,15 +5956,4 @@ function closeSidebar(){
 // Fechar sidebar ao clicar num item de nav no mobile
 document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('.nav-item').forEach(function(el){
-    el.addEventListener('click', function(){
-      if(window.innerWidth <= 768) closeSidebar();
-    });
-  });
-});
-// Actualizar nome no topbar mobile
-function updateMobileTopbar(){
-  var el = document.getElementById('tbUser');
-  if(el && CU) el.textContent = CU.name ? CU.name.split(' ')[0] : '—';
-}
-
-</script>
+    el.addEventListener('click
