@@ -1163,25 +1163,25 @@ function setClienti(arr){
 }
 function setStazioni(arr){
   _cache.stazioni=arr.slice();
-  var sbArr = arr.map(function(s){
-    return {
-      id: s.id,
-      nome: s.nome||'',
-      piva: s.piva||'',
-      ind: s.ind||'',
-      tel: s.tel||''
-    };
-  });
-  
-  sbUpsert('stazioni', sbArr)
-    .then(function(r){
-      console.log('✅ Stazioni sincronizzate com sucesso');
-      return r.ok ? r : Promise.reject(new Error('Response status '+r.status));
-    })
-    .catch(function(e){
-      console.error('❌ ERRO ao sincronizar stazioni:', e);
-      showToast('Erro ao salvar no Supabase: '+e.message, 'err');
-    });
+  // Salvar no localStorage para persistência
+  try {
+    localStorage.setItem('fuelpass_stazioni', JSON.stringify(arr));
+    console.log('✅ Stazioni salvas localmente');
+  } catch(e) {
+    console.warn('localStorage indisponível:', e);
+  }
+}
+
+function loadStazioniFromLocal(){
+  try {
+    var stored = localStorage.getItem('fuelpass_stazioni');
+    if(stored){
+      _cache.stazioni = JSON.parse(stored);
+      console.log('✅ Stazioni carregadas do localStorage');
+    }
+  } catch(e) {
+    console.warn('Erro ao carregar stazioni local:', e);
+  }
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
@@ -1342,6 +1342,7 @@ function doLogin(){
   if(btn){btn.disabled=true;btn.textContent='Connessione in corso...';}
   loadAllData(function(){
     seed();
+    loadStazioniFromLocal(); // Restaurar dados locais salvos
     // Forcar actualizacao da mensagem M1 para versao mais recente
     var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
     var msgs = _cache.messages;
@@ -5956,4 +5957,15 @@ function closeSidebar(){
 // Fechar sidebar ao clicar num item de nav no mobile
 document.addEventListener('DOMContentLoaded', function(){
   document.querySelectorAll('.nav-item').forEach(function(el){
-    el.addEventListener('click
+    el.addEventListener('click', function(){
+      if(window.innerWidth <= 768) closeSidebar();
+    });
+  });
+});
+// Actualizar nome no topbar mobile
+function updateMobileTopbar(){
+  var el = document.getElementById('tbUser');
+  if(el && CU) el.textContent = CU.name ? CU.name.split(' ')[0] : '—';
+}
+
+</script>
