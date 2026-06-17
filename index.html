@@ -1003,7 +1003,7 @@ function loadAllData(callback){
   if(btn) btn.textContent = 'Connessione al database...';
 
   var tables = [
-    {path:'/vouchers?select=*&order=created_at.asc', key:'vouchers', map:vFromSb},
+    {path:'/vouchers?select=*', key:'vouchers', map:vFromSb},
     {path:'/utenti?select=*', key:'users', map:uFromSb},
     {path:'/clienti?select=*', key:'clienti', map:null},
     {path:'/stazioni?select=*', key:'stazioni', map:null},
@@ -1039,7 +1039,7 @@ function loadAllData(callback){
   // ordini incluído no Promise.all para garantir que chega antes do callback
   tasks.push((function(){
     var p;
-    try { p = sbFetch('/ordini?select=*&order=data.desc', 'GET'); }
+    try { p = sbFetch('/ordini?select=*', 'GET'); }
     catch(ex){ console.warn('ordini load:', ex); _cache.ordini=[]; return Promise.resolve(); }
     return p
       .then(function(r){ return r.ok ? r.json() : []; })
