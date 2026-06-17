@@ -997,10 +997,10 @@ function uFromSb(r){
 function mToSb(m){ return {id:m.id, lbl:m.lbl, txt:m.txt}; }
 function mFromSb(r){ return {id:r.id, lbl:r.lbl, txt:r.txt}; }
 function sToSb(s){ 
-  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', logo:s.logo||null}; 
+  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', gerente_id:s.gerenteId||null, logo:s.logo||null}; 
 }
 function sFromSb(r){ 
-  return {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||''}; 
+  return {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', gerenteId:r.gerente_id||null, logo:r.logo||null}; 
 }
 
 // ── Carica tutti i dati ──
@@ -1131,6 +1131,20 @@ function setOrdini(arr){
 }
 function getClienti(){return _cache.clienti.slice();}
 function getStazioni(){return _cache.stazioni.slice();}
+
+function getStazioniByUser(){
+  // Se é admin, retorna todas as stazioni
+  if(_user && _user.role === 'admin') return getStazioni();
+  
+  // Se não é admin, retorna apenas as stazioni que ele gere
+  if(_user && _user.id) {
+    return getStazioni().filter(function(s){
+      return s.gerenteId === _user.id;
+    });
+  }
+  
+  return [];
+}
 function getPdv(){return _cache.pdv.slice();}
 function getMessages(){return _cache.messages.slice();}
 function getLog(){return _cache.log.slice();}
@@ -2781,7 +2795,7 @@ function expCSVUtilizzi(){
 // SETTINGS
 // ══════════════════════════════════════════════════════
 function pgSettings(el){
-  var ss=getStazioni();
+  var ss=getStazioniByUser();
   var stRows=ss.map(function(s){
     return '<tr>'
       +'<td>'+(s.logo?'<img src="'+s.logo+'" style="height:24px;max-width:60px;object-fit:contain;vertical-align:middle;margin-right:6px;border-radius:3px;">':'')
@@ -3828,6 +3842,7 @@ function openStazione(id){
     +'<h3>'+(id?'Modifica Stazione':'Nuova Stazione Emittente')+'</h3>'
     +'<div class="fld"><label>Nome Commerciale</label><input type="text" id="st_nome" value="'+escA(s?s.nome:'')+'" placeholder="es: Enilive Sedico"/></div>'
     +'<div class="fld"><label>Ragione Sociale</label><input type="text" id="st_rag" value="'+escA(s?s.rag:'')+'" placeholder="es: Carburante Dolomite Sas"/></div>'
+    +'<div class="fld"><label>Gerente (Acesso Restrito)</label><select id="st_gerente"><option value="">— Nenhum —</option>'+getUtenti().map(u=>'<option value="'+u.id+'" '+(s&&s.gerenteId===u.id?'selected':'')+'>'+escA(u.name)+' ('+u.role+')</option>').join('')+'</select></div>'
     +'<div class="mgrid">'
     +'<div class="fld"><label>Partita IVA</label><input type="text" id="st_piva" value="'+escA(s?s.piva:'')+'" placeholder="IT01176250254"/></div>'
     +'<div class="fld"><label>Indirizzo</label><input type="text" id="st_ind" value="'+escA(s?s.ind:'')+'" placeholder="Via Feltre 107"/></div>'
@@ -3905,7 +3920,7 @@ function saveStazione(){
   var ss=getStazioni();
   var existing=_editStazione?ss.find(function(s){return s.id===_editStazione;}):null;
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
-  var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo};
+  var gerenteId=(document.getElementById('st_gerente')||{}).value||null;var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
   setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
