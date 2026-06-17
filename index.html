@@ -936,6 +936,33 @@ var _SB_KEY = 'sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc';
 var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[],liquidazioni:[]};
 var _bm2Action = null;
 var _cacheLoaded = false;
+var _gerentesMap = {}; // Mapa de gerentes (stationId -> gerenteId)
+
+function loadGerenteMap(){
+  try {
+    var stored = localStorage.getItem('fuelpass_gerenti');
+    if(stored) _gerentesMap = JSON.parse(stored);
+    console.log('✅ Mapa de gerentes carregado:', Object.keys(_gerentesMap).length, 'stazioni');
+  } catch(e) {
+    console.error('❌ Erro ao carregar mapa de gerentes:', e);
+  }
+}
+
+function setStazioneGerente(stazioneId, gerenteId){
+  if(stazioneId && gerenteId) {
+    _gerentesMap[stazioneId] = gerenteId;
+    try { 
+      localStorage.setItem('fuelpass_gerenti', JSON.stringify(_gerentesMap));
+      console.log('✅ Gerente salvo para stazione:', stazioneId, '=', gerenteId);
+    } catch(e) {
+      console.error('❌ Erro ao salvar gerente:', e);
+    }
+  }
+}
+
+function getStazioneGerente(stazioneId){
+  return stazioneId ? (_gerentesMap[stazioneId] || null) : null;
+}
 
 function sbFetch(path, method, body, prefer){
   var opts = {
@@ -1000,11 +1027,15 @@ function sToSb(s){
   return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', logo:s.logo||null}; 
 }
 function sFromSb(r){ 
-  return {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', gerenteId:r.gerente_id||null, logo:r.logo||null}; 
+  var s = {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', logo:r.logo||null};
+  // Restaurar gerente do mapa local
+  s.gerenteId = getStazioneGerente(r.id);
+  return s;
 }
 
 // ── Carica tutti i dati ──
 function loadAllData(callback){
+  loadGerenteMap(); // Carregar mapa de gerentes localmente
   var btn = document.querySelector('.btnprimary');
   if(btn) btn.textContent = 'Connessione al database...';
 
@@ -3947,9 +3978,11 @@ function saveStazione(){
   var ss=getStazioni();
   var existing=_editStazione?ss.find(function(s){return s.id===_editStazione;}):null;
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
+  var stazioneId=_editStazione||uid(); // Definir ID da stazione
   var gerenteId=(document.getElementById('st_gerente')||{}).value||null;
   // Guardar gerente localmente
-  if(gerenteId) setStazioneGerente(stazioneId, gerenteId);var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
+  if(gerenteId) setStazioneGerente(stazioneId, gerenteId);
+  var obj={id:stazioneId,nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
   setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
