@@ -3910,15 +3910,15 @@ function openStazione(id){
       var opt = document.createElement('option');
       opt.value = u.id;
       opt.textContent = escA(u.name) + ' (' + u.role + ')';
-      if(s && s.gerenteId === u.id) opt.selected = true;
       gerenteSelect.appendChild(opt);
-      // Restaurar gerente salvo localmente
-      var savedGerente = getStazioneGerente(s ? s.id : null);
-      if(savedGerente) {
-        var opts = gerenteSelect.querySelectorAll('option');
-        opts.forEach(function(o){ if(o.value === savedGerente) o.selected = true; });
-      }
     });
+    // Restaurar gerente salvo localmente - FORA DO LOOP!
+    var savedGerente = getStazioneGerente(s ? s.id : null);
+    if(savedGerente) {
+      var opts = gerenteSelect.querySelectorAll('option');
+      opts.forEach(function(o){ if(o.value === savedGerente) o.selected = true; });
+      console.log('✅ Gerente restaurado:', savedGerente);
+    }
   }
 }
 
