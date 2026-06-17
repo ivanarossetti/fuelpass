@@ -1189,10 +1189,20 @@ function setStazioni(arr){
       nome: s.nome||'',
       marca: s.marca||'',
       ind: s.ind||'',
-      logo: s.logo||null
+      logo: s.logo||null,
+      gerente_id: s.gerenteId||null
     };
   });
   sbUpsert('stazioni', sbArr).catch(function(e){console.warn('sync st',e);});
+}
+function getStazioneGerente(sid){
+  var s=getStazioni().find(function(x){return x.id===sid;});
+  return s?s.gerenteId||null:null;
+}
+function setStazioneGerente(sid,uid){
+  var ss=getStazioni();
+  var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===sid){idx=i;break;}}
+  if(idx>-1){ss[idx].gerenteId=uid||null;setStazioni(ss);}
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
@@ -2772,18 +2782,15 @@ function pgSettings(el){
       +'<td class="mono" style="font-size:11px;">'+escH(s.piva||'—')+'</td>'
       +'<td style="font-size:11px;color:var(--gr)">'+escH([s.ind,s.cit].filter(Boolean).join(', ')||'—')+'</td>'
       +'<td style="font-size:11px;">'+escH(s.tel||'—')+'</td>'
-      +'<td><div class="flex" style="gap:3px;">'
-      +'<button class="btn btn-out btn-sm" data-sid="'+s.id+'" onclick="openStazione(this.dataset.sid)">&#9999;</button>'
-      +'<button class="btn btn-red btn-sm" data-sid="'+s.id+'" onclick="deleteStazione(this.dataset.sid)">&#128465;</button>'
-      +'</div></td></tr>';
+      +(function(){        var ger=s.gerenteId?getUsers().find(function(u){return u.id===s.gerenteId;}):null;        return '<td style="font-size:11px;">'+(ger?'<span style="background:var(--blue-lt);color:var(--bl);padding:2px 7px;border-radius:10px;font-size:10px;">'+escH(ger.name)+'</span>':'<span style="color:var(--gr);font-size:10px;">—</span>')+'</td>';      })()      +'<td><div class="flex" style="gap:3px;">'      +'<button class="btn btn-out btn-sm" data-sid="'+s.id+'" onclick="openStazione(this.dataset.sid)">&#9999;</button>'      +'<button class="btn btn-red btn-sm" data-sid="'+s.id+'" onclick="deleteStazione(this.dataset.sid)">&#128465;</button>'      +'</div></td></tr>';
   }).join('');
-  if(!ss.length)stRows='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--gr);">Nessuna stazione configurata.</td></tr>';
+  if(!ss.length)stRows='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gr);">Nessuna stazione configurata.</td></tr>';
   el.innerHTML='<div class="ph"><div class="ph-ic">&#9881;</div>'
     +'<div class="ph-tx"><h2>Impostazioni</h2><p>Stazioni emittenti e configurazione sistema</p></div></div>'
     +'<div class="card" style="margin-bottom:16px;">'
     +'<div class="card-hd"><h3>&#127970; Stazioni / Aziende Emittenti</h3>'
     +'<button class="btn btn-bl btn-sm" onclick="openStazione()">+ Nuova Stazione</button></div>'
-    +'<table><thead><tr><th>Nome / Ragione Sociale</th><th>P.IVA</th><th>Sede</th><th>Telefono</th><th>Azioni</th></tr></thead>'
+    +'<table><thead><tr><th>Nome / Ragione Sociale</th><th>P.IVA</th><th>Sede</th><th>Telefono</th><th>Gerente</th><th>Azioni</th></tr></thead>'
     +'<tbody>'+stRows+'</tbody></table></div>'
     +'<div class="fsec" style="background:var(--blue-lt);border-color:rgba(0,61,165,.2);">'
     +'<div class="fsec-title">&#128161; Informazione</div>'
@@ -3825,10 +3832,7 @@ function openStazione(id){
     +'</div>'
     +(s&&s.logo?'<button class="btn btn-out btn-sm" style="margin-top:5px;" onclick="rmStLogo()">&#10005; Rimuovi</button>':'')
     +'</div>'
-    +'<div class="mactions">'
-    +'<button class="btn btn-out" onclick="closeM(\'stazioneModal\')">Annulla</button>'
-    +'<button class="btn btn-bl" onclick="saveStazione()">Salva Stazione</button>'
-    +'</div></div>';
+    +(function(){      var us=getUsers();      var opts='<option value="">— Nessun gerente —</option>';      us.forEach(function(u){        var sel=(s&&s.gerenteId===u.id)?' selected':'';        opts+='<option value="'+escA(u.id)+'"'+sel+'>'+escH(u.name)+' ('+escH(u.role)+')</option>';      });      return '<div class="fld"><label>&#128100; Gerente Responsabile</label><select id="st_gerente">'+opts+'</select></div>';    })()    +'<div class="mactions">'    +'<button class="btn btn-out" onclick="closeM(\'stazioneModal\')">Annulla</button>'    +'<button class="btn btn-bl" onclick="saveStazione()">Salva Stazione</button>'    +'</div></div>';
   document.body.appendChild(ov);
 }
 
@@ -3850,7 +3854,8 @@ function saveStazione(){
   var ss=getStazioni();
   var existing=_editStazione?ss.find(function(s){return s.id===_editStazione;}):null;
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
-  var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo};
+  var gerenteEl=document.getElementById('st_gerente');var gerenteId=gerenteEl?gerenteEl.value||null:null;
+  var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
   setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
