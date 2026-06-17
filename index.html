@@ -1177,23 +1177,21 @@ function setStazioni(arr){
 }
 
 function loadStazioniFromLocal(){
-  // Fazer MERGE dos dados do localStorage com os do Supabase
-  // Os dados do localStorage sobrescrevem os do Supabase
+  // Fazer MERGE dos dados da memória/localStorage com os do Supabase
+  // Os dados locais (memória ou localStorage) sobrescrevem os do Supabase
   try {
-    var stored = localStorage.getItem('fuelpass_stazioni');
-    if(stored){
-      var localStazioni = JSON.parse(stored);
-      // Mapear os IDs para fazer merge
+    var stored = window._fuelpass_stazioni || JSON.parse(localStorage.getItem('fuelpass_stazioni') || '[]');
+    if(stored && stored.length > 0){
       var sbMap = {};
       _cache.stazioni.forEach(function(s){ sbMap[s.id] = s; });
       
-      // Sobrescrever com dados do localStorage (que são mais recentes)
-      localStazioni.forEach(function(ls){
+      // Sobrescrever com dados locais (que são mais recentes)
+      stored.forEach(function(ls){
         sbMap[ls.id] = Object.assign({}, sbMap[ls.id], ls);
       });
       
       _cache.stazioni = Object.keys(sbMap).map(function(k){ return sbMap[k]; });
-      console.log('✅ Stazioni sincronizadas (localStorage + Supabase)');
+      console.log('✅ Stazioni sincronizadas (local + Supabase)');
     }
   } catch(e) {
     console.warn('Erro ao sincronizar stazioni:', e);
