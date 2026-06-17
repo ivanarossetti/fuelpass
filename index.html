@@ -1129,7 +1129,7 @@ function setOrdini(arr){
   });
   sbUpsert('ordini', sbArr).catch(function(e){console.warn('sync ordini',e);});
 }
-function getUtenti(){return _cache.utenti.slice();}
+function getUtenti(){return (_cache.utenti||[]).slice();}
 
 function getClienti(){return _cache.clienti.slice();}
 function getStazioni(){return _cache.stazioni.slice();}
