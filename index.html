@@ -996,6 +996,12 @@ function uFromSb(r){
 }
 function mToSb(m){ return {id:m.id, lbl:m.lbl, txt:m.txt}; }
 function mFromSb(r){ return {id:r.id, lbl:r.lbl, txt:r.txt}; }
+function sToSb(s){ 
+  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||''}; 
+}
+function sFromSb(r){ 
+  return {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||''}; 
+}
 
 // ── Carica tutti i dati ──
 function loadAllData(callback){
@@ -1157,23 +1163,27 @@ function setClienti(arr){
   sbUpsert('clienti', sbArr).catch(function(e){console.warn('sync cl',e);});
 }
 function setStazioni(arr){
-  // Remover logo do array antes de salvar (tamanho muito grande)
-  var arrSemLogo = arr.map(function(s){
-    var copy = {};
-    for(var key in s) {
-      if(key !== 'logo') copy[key] = s[key];
-    }
-    return copy;
-  });
-  
   _cache.stazioni=arr.slice();
-  // Salvar no localStorage para persistência (sem logo)
+  
+  // Converter para formato Supabase e sincronizar
+  var sbArr = arr.map(function(s){ return sToSb(s); });
+  
+  // Salvar no sessionStorage também
   try {
-    sessionStorage.setItem('fuelpass_stazioni', JSON.stringify(arrSemLogo));
-    console.log('✅ Stazioni salvas localmente (sem logo)');
+    sessionStorage.setItem('fuelpass_stazioni', JSON.stringify(sbArr));
   } catch(e) {
-    console.warn('localStorage indisponível:', e);
+    console.warn('sessionStorage indisponível:', e);
   }
+  
+  // SINCRONIZAR COM SUPABASE
+  sbUpsert('stazioni', sbArr)
+    .then(function(r){
+      console.log('✅ Stazioni sincronizadas com Supabase');
+      return r;
+    })
+    .catch(function(e){
+      console.error('❌ Erro ao sincronizar stazioni:', e);
+    });
 }
 
 function loadStazioniFromLocal(){
