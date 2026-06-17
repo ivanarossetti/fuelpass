@@ -3881,6 +3881,12 @@ function openStazione(id){
       opt.textContent = escA(u.name) + ' (' + u.role + ')';
       if(s && s.gerenteId === u.id) opt.selected = true;
       gerenteSelect.appendChild(opt);
+      // Restaurar gerente salvo localmente
+      var savedGerente = getStazioneGerente(s ? s.id : null);
+      if(savedGerente) {
+        var opts = gerenteSelect.querySelectorAll('option');
+        opts.forEach(function(o){ if(o.value === savedGerente) o.selected = true; });
+      }
     });
   }
 }
@@ -3941,7 +3947,9 @@ function saveStazione(){
   var ss=getStazioni();
   var existing=_editStazione?ss.find(function(s){return s.id===_editStazione;}):null;
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
-  var gerenteId=(document.getElementById('st_gerente')||{}).value||null;var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
+  var gerenteId=(document.getElementById('st_gerente')||{}).value||null;
+  // Guardar gerente localmente
+  if(gerenteId) setStazioneGerente(stazioneId, gerenteId);var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
   setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
