@@ -1134,16 +1134,17 @@ function getStazioni(){return _cache.stazioni.slice();}
 
 function getStazioniByUser(){
   // Se é admin, retorna todas as stazioni
-  if(_user && _user.role === 'admin') return getStazioni();
+  if(window._user && window._user.role === 'admin') return getStazioni();
   
   // Se não é admin, retorna apenas as stazioni que ele gere
-  if(_user && _user.id) {
+  if(window._user && window._user.id) {
     return getStazioni().filter(function(s){
-      return s.gerenteId === _user.id;
+      return s.gerenteId === window._user.id;
     });
   }
   
-  return [];
+  // Se não há _user definido, retorna todas (fallback)
+  return getStazioni();
 }
 function getPdv(){return _cache.pdv.slice();}
 function getMessages(){return _cache.messages.slice();}
