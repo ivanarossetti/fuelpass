@@ -3872,6 +3872,33 @@ function prevStLogo(inp){
 
 function rmStLogo(){_stLogo='REMOVE';var el=document.getElementById('st_logo_img');if(el)el.style.display='none';}
 
+
+function uploadLogoToStorage(base64Logo, stazioneId){
+  // Converter base64 para Blob
+  var arr = base64Logo.split(',');
+  var mime = arr[0].match(/:(.*?);/)[1];
+  var bstr = atob(arr[1]);
+  var n = bstr.length;
+  var u8arr = new Uint8Array(n);
+  while(n--) u8arr[n] = bstr.charCodeAt(n);
+  var blob = new Blob([u8arr], {type:mime});
+  
+  // Enviar para Supabase Storage
+  var filename = 'stazioni/' + stazioneId + '/logo.jpg';
+  return fetch('https://ycaismhhnunrzdllaswq.supabase.co/storage/v1/object/public/' + filename, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc'
+    },
+    body: blob
+  })
+  .then(function(r){ 
+    if(!r.ok) throw new Error('Upload falhou: ' + r.status);
+    return 'https://ycaismhhnunrzdllaswq.supabase.co/storage/v1/object/public/' + filename;
+  });
+}
+
+
 function saveStazione(){
   var nome=(document.getElementById('st_nome')||{}).value||'';nome=nome.trim();
   if(!nome){showToast('Nome obbligatorio','err');return;}
