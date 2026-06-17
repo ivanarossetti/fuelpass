@@ -1169,7 +1169,7 @@ function setStazioni(arr){
   _cache.stazioni=arr.slice();
   // Salvar no localStorage para persistência (sem logo)
   try {
-    localStorage.setItem('fuelpass_stazioni', JSON.stringify(arrSemLogo));
+    sessionStorage.setItem('fuelpass_stazioni', JSON.stringify(arrSemLogo));
     console.log('✅ Stazioni salvas localmente (sem logo)');
   } catch(e) {
     console.warn('localStorage indisponível:', e);
@@ -1180,7 +1180,7 @@ function loadStazioniFromLocal(){
   // Fazer MERGE dos dados da memória/localStorage com os do Supabase
   // Os dados locais (memória ou localStorage) sobrescrevem os do Supabase
   try {
-    var stored = window._fuelpass_stazioni || JSON.parse(localStorage.getItem('fuelpass_stazioni') || '[]');
+    var stored = window._fuelpass_stazioni || JSON.parse(sessionStorage.getItem('fuelpass_stazioni') || '[]');
     if(stored && stored.length > 0){
       var sbMap = {};
       _cache.stazioni.forEach(function(s){ sbMap[s.id] = s; });
