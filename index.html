@@ -1177,18 +1177,26 @@ function setStazioni(arr){
 }
 
 function loadStazioniFromLocal(){
-  // Apenas usa localStorage como BACKUP se não houver dados do Supabase
-  // Não sobrescreve dados recém-carregados do Supabase
-  if(!_cache.stazioni || _cache.stazioni.length === 0){
-    try {
-      var stored = localStorage.getItem('fuelpass_stazioni');
-      if(stored){
-        _cache.stazioni = JSON.parse(stored);
-        console.log('✅ Stazioni restauradas do localStorage (backup)');
-      }
-    } catch(e) {
-      console.warn('Erro ao carregar stazioni local:', e);
+  // Fazer MERGE dos dados do localStorage com os do Supabase
+  // Os dados do localStorage sobrescrevem os do Supabase
+  try {
+    var stored = localStorage.getItem('fuelpass_stazioni');
+    if(stored){
+      var localStazioni = JSON.parse(stored);
+      // Mapear os IDs para fazer merge
+      var sbMap = {};
+      _cache.stazioni.forEach(function(s){ sbMap[s.id] = s; });
+      
+      // Sobrescrever com dados do localStorage (que são mais recentes)
+      localStazioni.forEach(function(ls){
+        sbMap[ls.id] = Object.assign({}, sbMap[ls.id], ls);
+      });
+      
+      _cache.stazioni = Object.keys(sbMap).map(function(k){ return sbMap[k]; });
+      console.log('✅ Stazioni sincronizadas (localStorage + Supabase)');
     }
+  } catch(e) {
+    console.warn('Erro ao sincronizar stazioni:', e);
   }
 }
 function setPdv(arr){
