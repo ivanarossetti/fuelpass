@@ -3845,7 +3845,7 @@ function openStazione(id){
     +'<h3>'+(id?'Modifica Stazione':'Nuova Stazione Emittente')+'</h3>'
     +'<div class="fld"><label>Nome Commerciale</label><input type="text" id="st_nome" value="'+escA(s?s.nome:'')+'" placeholder="es: Enilive Sedico"/></div>'
     +'<div class="fld"><label>Ragione Sociale</label><input type="text" id="st_rag" value="'+escA(s?s.rag:'')+'" placeholder="es: Carburante Dolomite Sas"/></div>'
-    +'<div class="fld"><label>Gerente (Acesso Restrito)</label><select id="st_gerente"><option value="">— Nenhum —</option>'+getUtenti().map(u=>'<option value="'+u.id+'" '+(s&&s.gerenteId===u.id?'selected':'')+'>'+escA(u.name)+' ('+u.role+')</option>').join('')+'</select></div>'
+    +'<div class="fld"><label>Gerente (Acesso Restrito)</label><select id="st_gerente"><option value="">— Nenhum —</option></select></div>'
     +'<div class="mgrid">'
     +'<div class="fld"><label>Partita IVA</label><input type="text" id="st_piva" value="'+escA(s?s.piva:'')+'" placeholder="IT01176250254"/></div>'
     +'<div class="fld"><label>Indirizzo</label><input type="text" id="st_ind" value="'+escA(s?s.ind:'')+'" placeholder="Via Feltre 107"/></div>'
@@ -3865,6 +3865,17 @@ function openStazione(id){
     +'<button class="btn btn-bl" onclick="saveStazione()">Salva Stazione</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+  // Preencher dropdown de gerente com utilizadores
+  var gerenteSelect = document.getElementById('st_gerente');
+  if(gerenteSelect && _cache && _cache.utenti) {
+    _cache.utenti.forEach(function(u){
+      var opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = escA(u.name) + ' (' + u.role + ')';
+      if(s && s.gerenteId === u.id) opt.selected = true;
+      gerenteSelect.appendChild(opt);
+    });
+  }
 }
 
 function prevStLogo(inp){
