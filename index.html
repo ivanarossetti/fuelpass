@@ -1159,19 +1159,37 @@ function getStazioni(){return _cache.stazioni.slice();}
 
 function getStazioniByUser(){
   // Admin vê todas as stazioni
-  if(window._user && window._user.role === 'admin') return getStazioni();
+  if(!CU || CU.role === 'admin') return getStazioni();
   
-  // Outros utilizadores veem apenas stazioni onde são gerentes
-  // Comparar por username (gerente_id armazena o username do utilizador)
-  if(window._user && window._user.id) {
-    return getStazioni().filter(function(s){
-      var gid = s.gerente_id || s.gerenteId || null;
-      return gid === window._user.id || gid === window._user.user;
-    });
-  }
-  
-  // Fallback: sem filtro
-  return getStazioni();
+  // Operatore vê apenas stazioni onde é gerente
+  return getStazioni().filter(function(s){
+    var gid = s.gerente_id || s.gerenteId || null;
+    return gid === CU.id || gid === CU.user;
+  });
+}
+
+// Retorna os IDs das stazioni do utilizador atual
+function getMyStazioneIds(){
+  return getStazioniByUser().map(function(s){ return s.id; });
+}
+
+// Filtra vouchers pela stazione do utilizador
+function getVouchersByUser(){
+  if(!CU || CU.role === 'admin') return getVouchers();
+  var ids = getMyStazioneIds();
+  if(!ids.length) return [];
+  return getVouchers().filter(function(v){
+    return ids.indexOf(v.emitId) > -1;
+  });
+}
+
+// Filtra clientes pela stazione do utilizador (clientes que têm vouchers dessa stazione)
+function getClientiByUser(){
+  if(!CU || CU.role === 'admin') return getClienti();
+  var vs = getVouchersByUser();
+  var clienteIds = {};
+  vs.forEach(function(v){ if(v.clienteId) clienteIds[v.clienteId] = true; });
+  return getClienti().filter(function(c){ return clienteIds[c.id]; });
 }
 function getPdv(){return _cache.pdv.slice();}
 function getMessages(){return _cache.messages.slice();}
@@ -1678,10 +1696,10 @@ function vpHTML(v){
 // DASHBOARD
 // ══════════════════════════════════════════════════════
 function pgDash(el){
-  var vs      = getVouchers();
+  var vs      = getVouchersByUser();
   var ordini  = getOrdini();
   var liqs    = getLiquidazioni();
-  var cs      = getClienti();
+  var cs      = getClientiByUser();
   var pdvs    = getPdv();
 
   // ── Calcular métricas
@@ -1958,7 +1976,7 @@ function vRowShort(v){
 }
 
 function pgVouchers(el){
-  var vs=getVouchers();
+  var vs=getVouchersByUser();
   var cnt={all:vs.length,valid:0,partial:0,used:0,expired:0};
   vs.forEach(function(v){var s=vSt(v);if(cnt[s]!==undefined)cnt[s]++;});
   el.innerHTML='<div class="ph"><div class="ph-ic">&#127915;</div>'
@@ -1978,7 +1996,7 @@ function pgVouchers(el){
     +'</div>'
     +'<div class="swrap"><input id="vsrch" placeholder="Cerca codice, nome..." oninput="renderVT()"/></div>'
     +'<div style="display:flex;align-items:center;gap:6px;">'
-      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;"><option value="all">Tutte le stazioni</option>'+getStazioni().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')+'</select>'
+      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;"><option value="all">Tutte le stazioni</option>'+getStazioniByUser().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')+'</select>'
       +'<select id="vSortSel" onchange="sortVSel()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'
         +'<option value="id_asc">N\u00b0 Codice \u2191</option>'
         +'<option value="id_desc">N\u00b0 Codice \u2193</option>'
@@ -2093,7 +2111,7 @@ function sortV(campo){
 }
 function filtVRows(){
   var q=document.getElementById('vsrch')?document.getElementById('vsrch').value.toLowerCase():'';
-  var vs=getVouchers().slice();
+  var vs=getVouchersByUser().slice();
   // Ordenação configurável
   vs.sort(function(a,b){
     var dir = _vSortDir==='asc' ? 1 : -1;
@@ -2450,7 +2468,7 @@ function stPrint(saveAsPdf){
 // CLIENTI
 // ══════════════════════════════════════════════════════
 function pgClienti(el){
-  var cs=getClienti(),vs=getVouchers();
+  var cs=getClientiByUser(),vs=getVouchersByUser();
   var rows=cs.map(function(c){
     var cvs=vs.filter(function(v){return v.clienteId===c.id;});
     var saldo=cvs.reduce(function(s,v){return s+(vSt(v)!=='used'?v.bal:0);},0);
@@ -3865,11 +3883,6 @@ function openStazione(id){
     +'<div class="fld"><label>Ragione Sociale</label><input type="text" id="st_rag" value="'+escA(s?s.rag:'')+'" placeholder="es: Carburante Dolomite Sas"/></div>'
     +'<div class="fld"><label>Gerente (Acesso Restrito)</label><select id="st_gerente">'+
     '<option value="">— Nenhum —</option>'+
-    '<option value="admin">Admin Principale (admin)</option>'+
-    '<option value="operatore">Helen Duarte (operatore)</option>'+
-    '<option value="sedico">Eni (sedico)</option>'+
-    '<option value="mario">Mario Bianchi (mario)</option>'+
-    '<option value="azienda">Responsabile Rossi (azienda)</option>'+
     '</select></div>'
     +'<div class="mgrid">'
     +'<div class="fld"><label>Partita IVA</label><input type="text" id="st_piva" value="'+escA(s?s.piva:'')+'" placeholder="IT01176250254"/></div>'
