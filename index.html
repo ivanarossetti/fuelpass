@@ -936,32 +936,27 @@ var _SB_KEY = 'sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc';
 var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[],liquidazioni:[]};
 var _bm2Action = null;
 var _cacheLoaded = false;
-var _gerentesMap = {}; // Mapa de gerentes (stationId -> gerenteId)
+// Gerente is now stored directly in Supabase stazioni.gerente_id column
+// No localStorage needed — truth lives in the DB
 
-function loadGerenteMap(){
-  try {
-    var stored = localStorage.getItem('fuelpass_gerenti');
-    if(stored) _gerentesMap = JSON.parse(stored);
-    console.log('✅ Mapa de gerentes carregado:', Object.keys(_gerentesMap).length, 'stazioni');
-  } catch(e) {
-    console.error('❌ Erro ao carregar mapa de gerentes:', e);
-  }
-}
-
-function setStazioneGerente(stazioneId, gerenteId){
-  if(stazioneId && gerenteId) {
-    _gerentesMap[stazioneId] = gerenteId;
-    try { 
-      localStorage.setItem('fuelpass_gerenti', JSON.stringify(_gerentesMap));
-      console.log('✅ Gerente salvo para stazione:', stazioneId, '=', gerenteId);
-    } catch(e) {
-      console.error('❌ Erro ao salvar gerente:', e);
-    }
-  }
+function setStazioneGerenteDB(stazioneId, gerenteId){
+  // Persist gerente_id directly to Supabase
+  return sbFetch('/stazioni?id=eq.'+encodeURIComponent(stazioneId), 'PATCH',
+    {gerente_id: gerenteId || null},
+    'return=minimal'
+  ).then(function(r){
+    if(!r.ok) throw new Error('PATCH gerente_id failed: ' + r.status);
+    console.log('✅ gerente_id saved to Supabase:', stazioneId, '=', gerenteId);
+  }).catch(function(e){
+    console.error('❌ Erro ao salvar gerente no Supabase:', e);
+  });
 }
 
 function getStazioneGerente(stazioneId){
-  return stazioneId ? (_gerentesMap[stazioneId] || null) : null;
+  // Read from in-memory cache (already loaded from Supabase)
+  if(!stazioneId) return null;
+  var s = _cache.stazioni.find(function(x){ return x.id === stazioneId; });
+  return s ? (s.gerente_id || s.gerenteId || null) : null;
 }
 
 function sbFetch(path, method, body, prefer){
@@ -1024,18 +1019,15 @@ function uFromSb(r){
 function mToSb(m){ return {id:m.id, lbl:m.lbl, txt:m.txt}; }
 function mFromSb(r){ return {id:r.id, lbl:r.lbl, txt:r.txt}; }
 function sToSb(s){ 
-  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', logo:s.logo||null}; 
+  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', logo:s.logo||null, gerente_id:s.gerente_id||s.gerenteId||null}; 
 }
 function sFromSb(r){ 
-  var s = {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', logo:r.logo||null};
-  // Restaurar gerente do mapa local
-  s.gerenteId = getStazioneGerente(r.id);
-  return s;
+  // gerente_id comes directly from Supabase — no localStorage needed
+  return {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', logo:r.logo||null, gerente_id:r.gerente_id||null, gerenteId:r.gerente_id||null};
 }
 
 // ── Carica tutti i dati ──
 function loadAllData(callback){
-  loadGerenteMap(); // Carregar mapa de gerentes localmente
   var btn = document.querySelector('.btnprimary');
   if(btn) btn.textContent = 'Connessione al database...';
 
@@ -1043,7 +1035,7 @@ function loadAllData(callback){
     {path:'/vouchers?select=*', key:'vouchers', map:vFromSb},
     {path:'/utenti?select=*', key:'users', map:uFromSb},
     {path:'/clienti?select=*', key:'clienti', map:null},
-    {path:'/stazioni?select=*', key:'stazioni', map:null},
+    {path:'/stazioni?select=*', key:'stazioni', map:sFromSb},
     {path:'/pdv?select=*', key:'pdv', map:null},
     {path:'/messaggi?select=*', key:'messages', map:mFromSb}
   ];
@@ -1166,17 +1158,19 @@ function getClienti(){return _cache.clienti.slice();}
 function getStazioni(){return _cache.stazioni.slice();}
 
 function getStazioniByUser(){
-  // Se é admin, retorna todas as stazioni
+  // Admin vê todas as stazioni
   if(window._user && window._user.role === 'admin') return getStazioni();
   
-  // Se não é admin, retorna apenas as stazioni que ele gere
+  // Outros utilizadores veem apenas stazioni onde são gerentes
+  // Comparar por username (gerente_id armazena o username do utilizador)
   if(window._user && window._user.id) {
     return getStazioni().filter(function(s){
-      return s.gerenteId === window._user.id;
+      var gid = s.gerente_id || s.gerenteId || null;
+      return gid === window._user.id || gid === window._user.user;
     });
   }
   
-  // Se não há _user definido, retorna todas (fallback)
+  // Fallback: sem filtro
   return getStazioni();
 }
 function getPdv(){return _cache.pdv.slice();}
@@ -1213,20 +1207,13 @@ function setClienti(arr){
 function setStazioni(arr){
   _cache.stazioni=arr.slice();
   
-  // Converter para formato Supabase e sincronizar
+  // Converter para formato Supabase (inclui gerente_id) e sincronizar
   var sbArr = arr.map(function(s){ return sToSb(s); });
-  
-  // Salvar no sessionStorage também
-  try {
-    sessionStorage.setItem('fuelpass_stazioni', JSON.stringify(sbArr));
-  } catch(e) {
-    console.warn('sessionStorage indisponível:', e);
-  }
   
   // SINCRONIZAR COM SUPABASE
   sbUpsert('stazioni', sbArr)
     .then(function(r){
-      console.log('✅ Stazioni sincronizadas com Supabase');
+      console.log('✅ Stazioni sincronizadas com Supabase (incl. gerente_id)');
       return r;
     })
     .catch(function(e){
@@ -1414,7 +1401,7 @@ function doLogin(){
   if(btn){btn.disabled=true;btn.textContent='Connessione in corso...';}
   loadAllData(function(){
     seed();
-    loadStazioniFromLocal(); // Restaurar dados locais salvos
+    // Supabase is the source of truth for stazioni (incl. gerente_id) — no local merge needed
     // Forcar actualizacao da mensagem M1 para versao mais recente
     var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
     var msgs = _cache.messages;
@@ -3905,19 +3892,19 @@ function openStazione(id){
   document.body.appendChild(ov);
   // Preencher dropdown de gerente com utilizadores
   var gerenteSelect = document.getElementById('st_gerente');
-  if(gerenteSelect && _cache && _cache.utenti) {
-    _cache.utenti.forEach(function(u){
+  if(gerenteSelect && _cache && _cache.users) {
+    _cache.users.forEach(function(u){
       var opt = document.createElement('option');
       opt.value = u.id;
       opt.textContent = escA(u.name) + ' (' + u.role + ')';
       gerenteSelect.appendChild(opt);
     });
-    // Restaurar gerente salvo localmente - FORA DO LOOP!
-    var savedGerente = getStazioneGerente(s ? s.id : null);
+    // Restaurar gerente diretamente do objeto stazione (vem do Supabase)
+    var savedGerente = s ? (s.gerente_id || s.gerenteId || null) : null;
     if(savedGerente) {
       var opts = gerenteSelect.querySelectorAll('option');
       opts.forEach(function(o){ if(o.value === savedGerente) o.selected = true; });
-      console.log('✅ Gerente restaurado:', savedGerente);
+      console.log('✅ Gerente restaurado do Supabase:', savedGerente);
     }
   }
 }
@@ -3980,11 +3967,13 @@ function saveStazione(){
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
   var stazioneId=_editStazione||uid(); // Definir ID da stazione
   var gerenteId=(document.getElementById('st_gerente')||{}).value||null;
-  // Guardar gerente localmente
-  if(gerenteId) setStazioneGerente(stazioneId, gerenteId);
-  var obj={id:stazioneId,nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo};
+  // Incluir gerente_id no objeto stazione (será persistido via sToSb/setStazioni)
+  var obj={id:stazioneId,nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerente_id:gerenteId||null,gerenteId:gerenteId||null};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
-  setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
+  setStazioni(ss);
+  // PATCH direto do gerente_id para garantir persistência imediata
+  setStazioneGerenteDB(stazioneId, gerenteId);
+  closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
 
 function deleteStazione(id){
