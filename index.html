@@ -358,32 +358,12 @@ tr:hover td{background:rgba(0,61,165,.02);}
 #printArea .cut-grid {
   position: relative;
 }
+/* LINHAS REMOVIDAS - Retirado a pedido do utilizador */
 #printArea .cut-grid::before {
-  content: '✂';
-  position: absolute;
-  left: calc(50% - 8px);
-  top: 0;
-  bottom: 0;
-  width: 16px;
-  border-left: 1.5px dashed #AABBD0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: #AABBD0;
-  pointer-events: none;
-  z-index: 10;
+  display: none !important;
 }
 #printArea .cut-grid::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(50% - 1px);
-  height: 0;
-  border-top: 1.5px dashed #AABBD0;
-  pointer-events: none;
-  z-index: 10;
+  display: none !important;
 }
 #printArea .cut-h-label { display: none; }
 @media print {
@@ -444,13 +424,7 @@ tr:hover td{background:rgba(0,61,165,.02);}
 <div id="loginScreen">
 <div class="lcard">
   <div class="lbrand" style="display:flex;justify-content:center;margin-bottom:18px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="260" height="58"><defs><linearGradient id="llbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0047CC"/><stop offset="100%" stop-color="#002FA7"/></linearGradient><linearGradient id="llgd" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F7C948"/><stop offset="100%" stop-color="#C89400"/></linearGradient></defs><circle cx="40" cy="40" r="36" fill="url(#llbg)"/><rect x="25" y="23" width="24" height="30" rx="5" fill="#FFFFFF"/><rect x="33" y="13" width="9" height="14" rx="3" fill="#FFFFFF"/><path d="M42 14 Q54 14 54 22 Q54 28 48 29 L42 29" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round"/><ellipse cx="50" cy="20" rx="3.5" ry="4.8" fill="url(#llgd)"/><text x="37" y="45" font-family="Arial,sans-serif" font-size="14" font-weight="900" fill="#002FA7" text-anchor="middle">FP</text><rect x="27" y="49" width="20" height="2.2" rx="1.1" fill="url(#llgd)"/><rect x="86" y="10" width="1.5" height="60" rx="1" fill="#E0EAF8"/><text x="100" y="44" font-family="Arial,sans-serif" font-size="38" font-weight="900" fill="#002FA7" letter-spacing="-1.5">FuelPass</text><rect x="100" y="52" width="248" height="2" rx="1" fill="url(#llgd)"/><text x="100" y="68" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#002FA7" letter-spacing="0.5">fuelpass.it</text><text x="148" y="68" font-family="Arial,sans-serif" font-size="9" fill="#8A9AC8"> · gestione buoni carburante e servizi</text></svg></div>
-  <div style="font-size:10px;font-weight:700;color:var(--gr);letter-spacing:.07em;text-transform:uppercase;margin-bottom:7px;">Accedi come</div>
-  <div class="rolegrid">
-    <div class="rbtn active" onclick="selRole('admin',this)"><span class="ri">&#128081;</span>Amministratore</div>
-    <div class="rbtn" onclick="selRole('attendant',this)"><span class="ri">&#128295;</span>Operatore</div>
-    <div class="rbtn" onclick="selRole('company',this)"><span class="ri">&#127970;</span>Cliente</div>
-    <div class="rbtn" onclick="selRole('employee',this)"><span class="ri">&#128100;</span>Dipendente</div>
-  </div>
+
   <div class="fld"><label>Nome Utente</label><input type="text" id="li_user" placeholder="username" onkeydown="if(event.keyCode===13)doLogin()"/></div>
   <div class="fld"><label>Password</label><input type="password" id="li_pass" placeholder="••••••" onkeydown="if(event.keyCode===13)doLogin()"/></div>
   <button class="btnprimary" onclick="doLogin()">Accedi &#8594;</button>
@@ -962,6 +936,33 @@ var _SB_KEY = 'sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc';
 var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[],liquidazioni:[]};
 var _bm2Action = null;
 var _cacheLoaded = false;
+var _gerentesMap = {}; // Mapa de gerentes (stationId -> gerenteId)
+
+function loadGerenteMap(){
+  try {
+    var stored = localStorage.getItem('fuelpass_gerenti');
+    if(stored) _gerentesMap = JSON.parse(stored);
+    console.log('✅ Mapa de gerentes carregado:', Object.keys(_gerentesMap).length, 'stazioni');
+  } catch(e) {
+    console.error('❌ Erro ao carregar mapa de gerentes:', e);
+  }
+}
+
+function setStazioneGerente(stazioneId, gerenteId){
+  if(stazioneId && gerenteId) {
+    _gerentesMap[stazioneId] = gerenteId;
+    try { 
+      localStorage.setItem('fuelpass_gerenti', JSON.stringify(_gerentesMap));
+      console.log('✅ Gerente salvo para stazione:', stazioneId, '=', gerenteId);
+    } catch(e) {
+      console.error('❌ Erro ao salvar gerente:', e);
+    }
+  }
+}
+
+function getStazioneGerente(stazioneId){
+  return stazioneId ? (_gerentesMap[stazioneId] || null) : null;
+}
 
 function sbFetch(path, method, body, prefer){
   var opts = {
@@ -1022,14 +1023,24 @@ function uFromSb(r){
 }
 function mToSb(m){ return {id:m.id, lbl:m.lbl, txt:m.txt}; }
 function mFromSb(r){ return {id:r.id, lbl:r.lbl, txt:r.txt}; }
+function sToSb(s){ 
+  return {id:s.id, nome:s.nome||'', rag:s.rag||'', piva:s.piva||'', ind:s.ind||'', cit:s.cit||'', tel:s.tel||'', email:s.email||'', logo:s.logo||null}; 
+}
+function sFromSb(r){ 
+  var s = {id:r.id, nome:r.nome||'', rag:r.rag||'', piva:r.piva||'', ind:r.ind||'', cit:r.cit||'', tel:r.tel||'', email:r.email||'', logo:r.logo||null};
+  // Restaurar gerente do mapa local
+  s.gerenteId = getStazioneGerente(r.id);
+  return s;
+}
 
 // ── Carica tutti i dati ──
 function loadAllData(callback){
+  loadGerenteMap(); // Carregar mapa de gerentes localmente
   var btn = document.querySelector('.btnprimary');
   if(btn) btn.textContent = 'Connessione al database...';
 
   var tables = [
-    {path:'/vouchers?select=*&order=created_at.asc', key:'vouchers', map:vFromSb},
+    {path:'/vouchers?select=*', key:'vouchers', map:vFromSb},
     {path:'/utenti?select=*', key:'users', map:uFromSb},
     {path:'/clienti?select=*', key:'clienti', map:null},
     {path:'/stazioni?select=*', key:'stazioni', map:null},
@@ -1065,7 +1076,7 @@ function loadAllData(callback){
   // ordini incluído no Promise.all para garantir que chega antes do callback
   tasks.push((function(){
     var p;
-    try { p = sbFetch('/ordini?select=*&order=data.desc', 'GET'); }
+    try { p = sbFetch('/ordini?select=*', 'GET'); }
     catch(ex){ console.warn('ordini load:', ex); _cache.ordini=[]; return Promise.resolve(); }
     return p
       .then(function(r){ return r.ok ? r.json() : []; })
@@ -1108,6 +1119,7 @@ var _editMsg=null, _editVoucher=null, _clLogo=null, _pdvLogo=null;
 var _qrV=null, _batchIds=[], _editStazione=null, _stLogo=null;
 var _SECRET='ENL2025-DOLOMITE-VCR';
 var _vf='all';
+var _vStazione='all'; // filtro por stazione: 'all' ou id da stazione
 var _vSort='id'; // campo de ordenação: id, name, amt, bal, exp, created
 var _vSortDir='asc'; // asc ou desc
 
@@ -1148,8 +1160,25 @@ function setOrdini(arr){
   });
   sbUpsert('ordini', sbArr).catch(function(e){console.warn('sync ordini',e);});
 }
+function getUtenti(){return (_cache.utenti||[]).slice();}
+
 function getClienti(){return _cache.clienti.slice();}
 function getStazioni(){return _cache.stazioni.slice();}
+
+function getStazioniByUser(){
+  // Se é admin, retorna todas as stazioni
+  if(window._user && window._user.role === 'admin') return getStazioni();
+  
+  // Se não é admin, retorna apenas as stazioni que ele gere
+  if(window._user && window._user.id) {
+    return getStazioni().filter(function(s){
+      return s.gerenteId === window._user.id;
+    });
+  }
+  
+  // Se não há _user definido, retorna todas (fallback)
+  return getStazioni();
+}
 function getPdv(){return _cache.pdv.slice();}
 function getMessages(){return _cache.messages.slice();}
 function getLog(){return _cache.log.slice();}
@@ -1183,26 +1212,48 @@ function setClienti(arr){
 }
 function setStazioni(arr){
   _cache.stazioni=arr.slice();
-  var sbArr = arr.map(function(s){
-    return {
-      id: s.id,
-      nome: s.nome||'',
-      marca: s.marca||'',
-      ind: s.ind||'',
-      logo: s.logo||null,
-      gerente_id: s.gerenteId||null
-    };
-  });
-  sbUpsert('stazioni', sbArr).catch(function(e){console.warn('sync st',e);});
+  
+  // Converter para formato Supabase e sincronizar
+  var sbArr = arr.map(function(s){ return sToSb(s); });
+  
+  // Salvar no sessionStorage também
+  try {
+    sessionStorage.setItem('fuelpass_stazioni', JSON.stringify(sbArr));
+  } catch(e) {
+    console.warn('sessionStorage indisponível:', e);
+  }
+  
+  // SINCRONIZAR COM SUPABASE
+  sbUpsert('stazioni', sbArr)
+    .then(function(r){
+      console.log('✅ Stazioni sincronizadas com Supabase');
+      return r;
+    })
+    .catch(function(e){
+      console.error('❌ Erro ao sincronizar stazioni:', e);
+    });
 }
-function getStazioneGerente(sid){
-  var s=getStazioni().find(function(x){return x.id===sid;});
-  return s?s.gerenteId||null:null;
-}
-function setStazioneGerente(sid,uid){
-  var ss=getStazioni();
-  var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===sid){idx=i;break;}}
-  if(idx>-1){ss[idx].gerenteId=uid||null;setStazioni(ss);}
+
+function loadStazioniFromLocal(){
+  // Fazer MERGE dos dados da memória/localStorage com os do Supabase
+  // Os dados locais (memória ou localStorage) sobrescrevem os do Supabase
+  try {
+    var stored = window._fuelpass_stazioni || JSON.parse(sessionStorage.getItem('fuelpass_stazioni') || '[]');
+    if(stored && stored.length > 0){
+      var sbMap = {};
+      _cache.stazioni.forEach(function(s){ sbMap[s.id] = s; });
+      
+      // Sobrescrever com dados locais (que são mais recentes)
+      stored.forEach(function(ls){
+        sbMap[ls.id] = Object.assign({}, sbMap[ls.id], ls);
+      });
+      
+      _cache.stazioni = Object.keys(sbMap).map(function(k){ return sbMap[k]; });
+      console.log('✅ Stazioni sincronizadas (local + Supabase)');
+    }
+  } catch(e) {
+    console.warn('Erro ao sincronizar stazioni:', e);
+  }
 }
 function setPdv(arr){
   _cache.pdv=arr.slice();
@@ -1355,7 +1406,7 @@ function seed(){
 // ══════════════════════════════════════════════════════
 // AUTH
 // ══════════════════════════════════════════════════════
-function selRole(role,el){document.querySelectorAll('.rbtn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');}
+
 function doLogin(){
   var u=document.getElementById('li_user').value.trim().toLowerCase();
   var p=document.getElementById('li_pass').value;
@@ -1363,6 +1414,7 @@ function doLogin(){
   if(btn){btn.disabled=true;btn.textContent='Connessione in corso...';}
   loadAllData(function(){
     seed();
+    loadStazioniFromLocal(); // Restaurar dados locais salvos
     // Forcar actualizacao da mensagem M1 para versao mais recente
     var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
     var msgs = _cache.messages;
@@ -1939,6 +1991,7 @@ function pgVouchers(el){
     +'</div>'
     +'<div class="swrap"><input id="vsrch" placeholder="Cerca codice, nome..." oninput="renderVT()"/></div>'
     +'<div style="display:flex;align-items:center;gap:6px;">'
+      +'<select id="vStazioneSel" onchange="filterByStazione()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;"><option value="all">Tutte le stazioni</option>'+getStazioni().map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('')+'</select>'
       +'<select id="vSortSel" onchange="sortVSel()" style="padding:6px 10px;border:1.5px solid var(--gbd);border-radius:7px;font-size:12px;background:var(--gpl);color:var(--gmd);outline:none;cursor:pointer;">'
         +'<option value="id_asc">N\u00b0 Codice \u2191</option>'
         +'<option value="id_desc">N\u00b0 Codice \u2193</option>'
@@ -1983,6 +2036,7 @@ function pgVouchers(el){
 }
 
 function setVF(f,el){_vf=f;document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});el.classList.add('active');renderVT();}
+function filterByStazione(){var sel=document.getElementById('vStazioneSel');if(sel)_vStazione=sel.value;renderVT();}
 function renderVT(){var tb=document.getElementById('vtbody');if(tb)tb.innerHTML=filtVRows();}
 
 
@@ -2081,6 +2135,7 @@ function filtVRows(){
     }
   });
   if(_vf!=='all')vs=vs.filter(function(v){return vSt(v)===_vf;});
+  if(_vStazione!=='all')vs=vs.filter(function(v){return v.emitId===_vStazione;});
   if(q)vs=vs.filter(function(v){return v.id.toLowerCase().indexOf(q)>-1||v.name.toLowerCase().indexOf(q)>-1||stazioneName(v.emitId).toLowerCase().indexOf(q)>-1||clienteName(v.clienteId).toLowerCase().indexOf(q)>-1;});
   if(!vs.length)return '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--gr);">Nessun voucher trovato</td></tr>';
   return vs.map(function(v){
@@ -2774,7 +2829,7 @@ function expCSVUtilizzi(){
 // SETTINGS
 // ══════════════════════════════════════════════════════
 function pgSettings(el){
-  var ss=getStazioni();
+  var ss=getStazioniByUser();
   var stRows=ss.map(function(s){
     return '<tr>'
       +'<td>'+(s.logo?'<img src="'+s.logo+'" style="height:24px;max-width:60px;object-fit:contain;vertical-align:middle;margin-right:6px;border-radius:3px;">':'')
@@ -2782,15 +2837,18 @@ function pgSettings(el){
       +'<td class="mono" style="font-size:11px;">'+escH(s.piva||'—')+'</td>'
       +'<td style="font-size:11px;color:var(--gr)">'+escH([s.ind,s.cit].filter(Boolean).join(', ')||'—')+'</td>'
       +'<td style="font-size:11px;">'+escH(s.tel||'—')+'</td>'
-      +(function(){        var ger=s.gerenteId?getUsers().find(function(u){return u.id===s.gerenteId;}):null;        return '<td style="font-size:11px;">'+(ger?'<span style="background:var(--blue-lt);color:var(--bl);padding:2px 7px;border-radius:10px;font-size:10px;">'+escH(ger.name)+'</span>':'<span style="color:var(--gr);font-size:10px;">—</span>')+'</td>';      })()      +'<td><div class="flex" style="gap:3px;">'      +'<button class="btn btn-out btn-sm" data-sid="'+s.id+'" onclick="openStazione(this.dataset.sid)">&#9999;</button>'      +'<button class="btn btn-red btn-sm" data-sid="'+s.id+'" onclick="deleteStazione(this.dataset.sid)">&#128465;</button>'      +'</div></td></tr>';
+      +'<td><div class="flex" style="gap:3px;">'
+      +'<button class="btn btn-out btn-sm" data-sid="'+s.id+'" onclick="openStazione(this.dataset.sid)">&#9999;</button>'
+      +'<button class="btn btn-red btn-sm" data-sid="'+s.id+'" onclick="deleteStazione(this.dataset.sid)">&#128465;</button>'
+      +'</div></td></tr>';
   }).join('');
-  if(!ss.length)stRows='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gr);">Nessuna stazione configurata.</td></tr>';
+  if(!ss.length)stRows='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--gr);">Nessuna stazione configurata.</td></tr>';
   el.innerHTML='<div class="ph"><div class="ph-ic">&#9881;</div>'
     +'<div class="ph-tx"><h2>Impostazioni</h2><p>Stazioni emittenti e configurazione sistema</p></div></div>'
     +'<div class="card" style="margin-bottom:16px;">'
     +'<div class="card-hd"><h3>&#127970; Stazioni / Aziende Emittenti</h3>'
     +'<button class="btn btn-bl btn-sm" onclick="openStazione()">+ Nuova Stazione</button></div>'
-    +'<table><thead><tr><th>Nome / Ragione Sociale</th><th>P.IVA</th><th>Sede</th><th>Telefono</th><th>Gerente</th><th>Azioni</th></tr></thead>'
+    +'<table><thead><tr><th>Nome / Ragione Sociale</th><th>P.IVA</th><th>Sede</th><th>Telefono</th><th>Azioni</th></tr></thead>'
     +'<tbody>'+stRows+'</tbody></table></div>'
     +'<div class="fsec" style="background:var(--blue-lt);border-color:rgba(0,61,165,.2);">'
     +'<div class="fsec-title">&#128161; Informazione</div>'
@@ -3421,7 +3479,7 @@ function printVouchers(vouchers,saveAsPdf){
         } else {
           // Garantir que o printArea está visível e renderizado antes de imprimir
           pa.style.cssText='display:block!important;position:fixed!important;top:0!important;left:0!important;width:210mm!important;z-index:99999!important;background:white!important;';
-          // Aguardar mais tempo para garantir render completo
+          // Aguardar MAIS tempo para garantir render completo (800ms em vez de tempo insuficiente)
           setTimeout(function(){
             window.print();
             // Limpar após impressão
@@ -3440,7 +3498,7 @@ function printVouchers(vouchers,saveAsPdf){
                 pa.innerHTML='';
               }
             }, 5000);
-          }, 800);
+          }, 1500);
         }
       },500);
       return;
@@ -3818,6 +3876,14 @@ function openStazione(id){
     +'<h3>'+(id?'Modifica Stazione':'Nuova Stazione Emittente')+'</h3>'
     +'<div class="fld"><label>Nome Commerciale</label><input type="text" id="st_nome" value="'+escA(s?s.nome:'')+'" placeholder="es: Enilive Sedico"/></div>'
     +'<div class="fld"><label>Ragione Sociale</label><input type="text" id="st_rag" value="'+escA(s?s.rag:'')+'" placeholder="es: Carburante Dolomite Sas"/></div>'
+    +'<div class="fld"><label>Gerente (Acesso Restrito)</label><select id="st_gerente">'+
+    '<option value="">— Nenhum —</option>'+
+    '<option value="admin">Admin Principale (admin)</option>'+
+    '<option value="operatore">Helen Duarte (operatore)</option>'+
+    '<option value="sedico">Eni (sedico)</option>'+
+    '<option value="mario">Mario Bianchi (mario)</option>'+
+    '<option value="azienda">Responsabile Rossi (azienda)</option>'+
+    '</select></div>'
     +'<div class="mgrid">'
     +'<div class="fld"><label>Partita IVA</label><input type="text" id="st_piva" value="'+escA(s?s.piva:'')+'" placeholder="IT01176250254"/></div>'
     +'<div class="fld"><label>Indirizzo</label><input type="text" id="st_ind" value="'+escA(s?s.ind:'')+'" placeholder="Via Feltre 107"/></div>'
@@ -3832,21 +3898,79 @@ function openStazione(id){
     +'</div>'
     +(s&&s.logo?'<button class="btn btn-out btn-sm" style="margin-top:5px;" onclick="rmStLogo()">&#10005; Rimuovi</button>':'')
     +'</div>'
-    +(function(){      var us=getUsers();      var opts='<option value="">— Nessun gerente —</option>';      us.forEach(function(u){        var sel=(s&&s.gerenteId===u.id)?' selected':'';        opts+='<option value="'+escA(u.id)+'"'+sel+'>'+escH(u.name)+' ('+escH(u.role)+')</option>';      });      return '<div class="fld"><label>&#128100; Gerente Responsabile</label><select id="st_gerente">'+opts+'</select></div>';    })()    +'<div class="mactions">'    +'<button class="btn btn-out" onclick="closeM(\'stazioneModal\')">Annulla</button>'    +'<button class="btn btn-bl" onclick="saveStazione()">Salva Stazione</button>'    +'</div></div>';
+    +'<div class="mactions">'
+    +'<button class="btn btn-out" onclick="closeM(\'stazioneModal\')">Annulla</button>'
+    +'<button class="btn btn-bl" onclick="saveStazione()">Salva Stazione</button>'
+    +'</div></div>';
   document.body.appendChild(ov);
+  // Preencher dropdown de gerente com utilizadores
+  var gerenteSelect = document.getElementById('st_gerente');
+  if(gerenteSelect && _cache && _cache.utenti) {
+    _cache.utenti.forEach(function(u){
+      var opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = escA(u.name) + ' (' + u.role + ')';
+      gerenteSelect.appendChild(opt);
+    });
+    // Restaurar gerente salvo localmente - FORA DO LOOP!
+    var savedGerente = getStazioneGerente(s ? s.id : null);
+    if(savedGerente) {
+      var opts = gerenteSelect.querySelectorAll('option');
+      opts.forEach(function(o){ if(o.value === savedGerente) o.selected = true; });
+      console.log('✅ Gerente restaurado:', savedGerente);
+    }
+  }
 }
 
 function prevStLogo(inp){
   var f=inp.files[0];if(!f)return;
+  // Comprimir imagem para evitar ultrapassar limites de tamanho
   var r=new FileReader();r.onload=function(e){
-    _stLogo=e.target.result;
-    var el=document.getElementById('st_logo_img');
-    if(el){el.src=e.target.result;}
-    else{var ph=document.getElementById('st_logo_ph');if(ph){var img=document.createElement('img');img.id='st_logo_img';img.src=e.target.result;img.style.cssText='max-height:48px;max-width:150px;object-fit:contain;';ph.replaceWith(img);}}
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');
+      var maxWidth=200,maxHeight=100;
+      var ratio=Math.min(maxWidth/img.width, maxHeight/img.height);
+      canvas.width=img.width*ratio;
+      canvas.height=img.height*ratio;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      _stLogo=canvas.toDataURL('image/jpeg',0.7); // Comprimido a 70%
+      var el=document.getElementById('st_logo_img');
+      if(el){el.src=_stLogo;}
+      else{var ph=document.getElementById('st_logo_ph');if(ph){var imgE=document.createElement('img');imgE.id='st_logo_img';imgE.src=_stLogo;imgE.style.cssText='max-height:48px;max-width:150px;object-fit:contain;';ph.replaceWith(imgE);}}
+    };
+    img.src=e.target.result;
   };r.readAsDataURL(f);
 }
 
 function rmStLogo(){_stLogo='REMOVE';var el=document.getElementById('st_logo_img');if(el)el.style.display='none';}
+
+
+function uploadLogoToStorage(base64Logo, stazioneId){
+  // Converter base64 para Blob
+  var arr = base64Logo.split(',');
+  var mime = arr[0].match(/:(.*?);/)[1];
+  var bstr = atob(arr[1]);
+  var n = bstr.length;
+  var u8arr = new Uint8Array(n);
+  while(n--) u8arr[n] = bstr.charCodeAt(n);
+  var blob = new Blob([u8arr], {type:mime});
+  
+  // Enviar para Supabase Storage
+  var filename = 'stazioni/' + stazioneId + '/logo.jpg';
+  return fetch('https://ycaismhhnunrzdllaswq.supabase.co/storage/v1/object/public/' + filename, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc'
+    },
+    body: blob
+  })
+  .then(function(r){ 
+    if(!r.ok) throw new Error('Upload falhou: ' + r.status);
+    return 'https://ycaismhhnunrzdllaswq.supabase.co/storage/v1/object/public/' + filename;
+  });
+}
+
 
 function saveStazione(){
   var nome=(document.getElementById('st_nome')||{}).value||'';nome=nome.trim();
@@ -3854,8 +3978,11 @@ function saveStazione(){
   var ss=getStazioni();
   var existing=_editStazione?ss.find(function(s){return s.id===_editStazione;}):null;
   var logo=_stLogo==='REMOVE'?null:(_stLogo||(existing?existing.logo:null));
-  var gerenteEl=document.getElementById('st_gerente');var gerenteId=gerenteEl?gerenteEl.value||null:null;
-  var obj={id:_editStazione||uid(),nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo,gerenteId:gerenteId};
+  var stazioneId=_editStazione||uid(); // Definir ID da stazione
+  var gerenteId=(document.getElementById('st_gerente')||{}).value||null;
+  // Guardar gerente localmente
+  if(gerenteId) setStazioneGerente(stazioneId, gerenteId);
+  var obj={id:stazioneId,nome:nome,rag:(document.getElementById('st_rag')||{}).value.trim(),piva:(document.getElementById('st_piva')||{}).value.trim(),ind:(document.getElementById('st_ind')||{}).value.trim(),cit:(document.getElementById('st_cit')||{}).value.trim(),tel:(document.getElementById('st_tel')||{}).value.trim(),email:(document.getElementById('st_email')||{}).value.trim(),logo:logo};
   if(_editStazione){var idx=-1;for(var i=0;i<ss.length;i++){if(ss[i].id===_editStazione){idx=i;break;}}if(idx>-1)ss[idx]=obj;}else ss.push(obj);
   setStazioni(ss);closeM('stazioneModal');showToast('Stazione salvata','ok');goPage('settings');
 }
