@@ -2384,8 +2384,8 @@ function applyUse(id,imp,byU){
 // STAMPA / RISTAMPA PAGE
 // ══════════════════════════════════════════════════════
 function pgStampa(el){
-  var vs=getVouchers();
-  var cs=getClienti();
+  var vs=getVouchersByUser();
+  var cs=getClientiByUser();
   // Filtri
   var clOpts='<option value="">— Tutti i clienti —</option>'+cs.map(function(c){return'<option value="'+c.id+'">'+escH(c.nome)+'</option>';}).join('');
   el.innerHTML='<div class="ph"><div class="ph-ic">&#128424;</div>'
@@ -2418,7 +2418,7 @@ function stFilterApply(){
   var st=(document.getElementById('st_st')||{}).value||'';
   var from=(document.getElementById('st_from')||{}).value||'';
   var to=(document.getElementById('st_to')||{}).value||'';
-  var vs=getVouchers().filter(function(v){
+  var vs=getVouchersByUser().filter(function(v){
     if(cl&&v.clienteId!==cl)return false;
     if(st&&vSt(v)!==st)return false;
     if(from&&v.created<from)return false;
@@ -2459,7 +2459,7 @@ function stSelAll(v){document.querySelectorAll('.st-ck').forEach(function(ck){ck
 function stPrint(saveAsPdf){
   var ids=Array.from(document.querySelectorAll('.st-ck:checked')).map(function(ck){return ck.value;});
   if(!ids.length){showToast('Seleziona almeno un voucher','err');return;}
-  var vs=getVouchers().filter(function(v){return ids.indexOf(v.id)>-1;});
+  var vs=getVouchersByUser().filter(function(v){return ids.indexOf(v.id)>-1;});
   printVouchers(vs,saveAsPdf);
   addLog('print','Stampa '+vs.length+' voucher');
 }
@@ -2651,7 +2651,7 @@ function showRepTab(tab,el){
 }
 
 function renderRepStats(c){
-  var vs=getVouchers();
+  var vs=getVouchersByUser();
   var byFuel={},byEmit={};
   var totVal=0,totBal=0,todayUsed=0;
   vs.forEach(function(v){
@@ -2902,7 +2902,7 @@ function suggerisciSplit(importo){
 }
 
 function pgLista(el){
-  var ss = getStazioni(); var cs = getClienti();
+  var ss = getStazioniByUser(); var cs = getClientiByUser();
   var stOpts = ss.map(function(s){return '<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('');
   var clOpts = '<option value="">— Nessun cliente —</option>'+cs.map(function(c){return '<option value="'+c.id+'">'+escH(c.nome)+'</option>';}).join('');
   var d = new Date(); d.setMonth(d.getMonth()+3);
@@ -3570,10 +3570,10 @@ function generatePdfFromPrintArea(voucherCount,onDone){
 // PDF MODAL
 // ══════════════════════════════════════════════════════
 function openPdfModal(ids){
-  var vs=getVouchers();
+  var vs=getVouchersByUser();
   var list=ids&&ids.length?vs.filter(function(v){return ids.indexOf(v.id)>-1;}):vs;
   if(!list.length){showToast('Nessun voucher disponibile','err');return;}
-  var cs=getClienti();
+  var cs=getClientiByUser();
   var clFilter=document.getElementById('pdfClientFilter');
   if(clFilter){
     clFilter.innerHTML='<div class="fld" style="margin-bottom:0;display:flex;align-items:center;gap:8px;">'
@@ -3626,7 +3626,7 @@ function filterPdfByCliente(){
 function printSelectedPdf(savePdf){
   var ids=Array.from(document.querySelectorAll('.pdf-ck:checked')).map(function(ck){return ck.value;});
   if(!ids.length){showToast('Seleziona almeno un voucher','err');return;}
-  var vs=getVouchers().filter(function(v){return ids.indexOf(v.id)>-1;});
+  var vs=getVouchersByUser().filter(function(v){return ids.indexOf(v.id)>-1;});
   closeM('pdfModal');printVouchers(vs,savePdf);
   addLog('print','Stampa '+vs.length+' voucher');
 }
@@ -4893,8 +4893,8 @@ function pgRepStorico(el){
 // RELATÓRIO 1 — VOUCHER EMESSI (configurável)
 // ══════════════════════════════════════════════════════
 function renderRepVoucher(c){
-  var cs = getClienti();
-  var vs = getVouchers();
+  var cs = getClientiByUser();
+  var vs = getVouchersByUser();
 
   // Ler filtros actuais
   var filtCl  = (document.getElementById('rv_cl')||{}).value||'';
@@ -5222,13 +5222,13 @@ function stampaRepVoucher(){
 // RELATÓRIO 2 — STORICO UTILIZZI
 // ══════════════════════════════════════════════════════
 function renderRepStorico(c){
-  var vs = getVouchers();
+  var vs = getVouchersByUser();
   var filtCl  = (document.getElementById('rs_cl')||{}).value||'';
   var filtDa  = (document.getElementById('rs_da')||{}).value||'';
   var filtA   = (document.getElementById('rs_a')||{}).value||'';
   var filtPdv = (document.getElementById('rs_pdv')||{}).value||'';
 
-  var cs = getClienti();
+  var cs = getClientiByUser();
   var pdvs = getPdv();
 
   var clOpts  = '<option value="">Tutti i clienti</option>'+cs.map(function(c){return '<option value="'+c.id+'"'+(filtCl===c.id?' selected':'')+'>'+escH(c.rag||c.nome)+'</option>';}).join('');
@@ -5317,7 +5317,7 @@ function stampaRepStorico(){
 // ══════════════════════════════════════════════════════
 function renderRepScadenza(c){
   var gg = parseInt((document.getElementById('sc_gg')||{}).value)||30;
-  var vs = getVouchers();
+  var vs = getVouchersByUser();
   var oggi = today();
   var dataLimite = new Date();
   dataLimite.setDate(dataLimite.getDate() + gg);
