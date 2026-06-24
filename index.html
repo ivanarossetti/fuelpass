@@ -536,10 +536,18 @@ tr:hover td{background:rgba(0,61,165,.02);}
     <div class="emit-box-title">&#127970; Stazione Emittente</div>
     <div class="emit-row"><img id="bt_emit_logo"/><select id="bt_emit" onchange="updateEmitLogo('bt_emit','bt_emit_logo')"></select></div>
   </div>
+  <div class="fld">
+    <label>Modalità Importo</label>
+    <div class="tabs" style="margin-bottom:0;">
+      <div class="tab active" id="bt_mode_uniq" onclick="setBtMode('uniq',this)">Importo Unitario</div>
+      <div class="tab" id="bt_mode_multi" onclick="setBtMode('multi',this)">Valori Multipli</div>
+    </div>
+  </div>
   <div class="mgrid">
     <div class="fld"><label>Prefisso Codice</label><input type="text" id="bt_pfx" value="VC" maxlength="4" oninput="this.value=this.value.toUpperCase();btPrev()"/></div>
-    <div class="fld"><label>Numero Voucher</label><input type="number" id="bt_cnt" placeholder="10" min="1" max="500" oninput="btPrev()"/></div>
-    <div class="fld"><label>Importo Unitario (&#8364;)</label><input type="number" id="bt_amt" placeholder="50" min="1" step="1" oninput="btPrev()"/></div>
+    <div class="fld" id="bt_cnt_wrap"><label>Numero Voucher</label><input type="number" id="bt_cnt" placeholder="10" min="1" max="500" oninput="btPrev()"/></div>
+    <div class="fld" id="bt_amt_wrap"><label>Importo Unitario (&#8364;)</label><input type="number" id="bt_amt" placeholder="50" min="1" step="1" oninput="btPrev()"/></div>
+    <div class="fld gc2" id="bt_multi_wrap" style="display:none;"><label>Valori Voucher (separati da virgola, &#8364;)</label><input type="text" id="bt_multi" placeholder="es: 50, 30" oninput="btPrev()"/></div>
     <div class="fld"><label>Carburante</label><select id="bt_fuel"><option>Benzina</option><option>Diesel/Gasolio</option><option>GPL</option><option>Metano</option><option>Elettrico</option><option>HVO</option><option>Lavaggio</option><option>Lubrificanti</option><option>Qualsiasi</option></select></div>
     <div class="fld"><label>Data Scadenza</label><input type="date" id="bt_exp"/></div>
     <div class="fld"><label>Cliente <span style="font-weight:400;color:var(--gr)">(opzionale)</span></label><select id="bt_cliente"><option value="">— Nessun cliente —</option></select></div>
@@ -2927,6 +2935,7 @@ function pgLista(el){
     +'<div class="fld"><label>Cliente</label><select id="ls_cl">'+clOpts+'</select></div>'
     +'<div class="fld"><label>Carburante</label><select id="ls_fuel"><option>Benzina</option><option>Diesel/Gasolio</option><option>GPL</option><option>Metano</option><option>Elettrico</option><option>HVO</option><option>Lavaggio</option><option>Lubrificanti</option><option selected>Qualsiasi</option></select></div>'
     +'<div class="fld"><label>Scadenza</label><input type="date" id="ls_exp" value="'+defExp+'"/></div>'
+    +'<div class="fld"><label>Prefisso Codice</label><input type="text" id="ls_pfx" value="VC" maxlength="4" oninput="this.value=this.value.toUpperCase();"/></div>'
     +'<div class="fld"><label>Messaggio Legale</label>'
     +'<select id="ls_ms" onchange="applyMsg(\'ls_ms\',\'ls_mt\')"><option value="">— Nessun messaggio —</option></select></div>'
     +'<div class="fld"><label>Soglia Suddivisione (€)</label>'
@@ -3192,7 +3201,7 @@ function listaGenera(){
 
   var vs=getVouchers();
   var newIds=[];
-  var pfx='VC';
+  var pfx=((document.getElementById('ls_pfx')||{}).value||'VC').toUpperCase().trim()||'VC';
   var existNums=vs.filter(function(v){return v.id.indexOf(pfx)===0;})
     .map(function(v){return parseInt(v.id.replace(pfx,''),10);}).filter(function(n){return!isNaN(n);});
   var nextNum=existNums.length?Math.max.apply(null,existNums)+1:1;
@@ -3748,13 +3757,17 @@ function prorogaScadenza(id){
 // BATCH
 // ══════════════════════════════════════════════════════
 function openBatch(){
-  var ss=getStazioni();var cs=getClienti();
+  var ss=getStazioniByUser();var cs=getClientiByUser();
   document.getElementById('bt_emit').innerHTML=ss.map(function(s){return'<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('');
   document.getElementById('bt_cliente').innerHTML='<option value="">— Nessun cliente —</option>'+cs.map(function(c){return'<option value="'+c.id+'">'+escH(c.nome)+'</option>';}).join('');
   var d=new Date();d.setMonth(d.getMonth()+3);
   document.getElementById('bt_exp').value=d.toISOString().split('T')[0];
   fillPdvCk('bt_pdv',[]);fillMsgSel('bt_ms');
   document.getElementById('bt_mt').value='';
+  document.getElementById('bt_cnt').value='';
+  document.getElementById('bt_amt').value='';
+  document.getElementById('bt_multi').value='';
+  setBtMode('uniq', document.getElementById('bt_mode_uniq'));
   updateEmitLogo('bt_emit','bt_emit_logo');
   openM('batchModal');
 }
@@ -3764,18 +3777,40 @@ function tgBtN(){
   var w=document.getElementById('bt_nw');if(w)w.style.display=v==='nominale'?'block':'none';
 }
 
+var _btMode = 'uniq';
+
+function setBtMode(mode,el){
+  _btMode = mode;
+  document.getElementById('bt_mode_uniq').classList.toggle('active', mode==='uniq');
+  document.getElementById('bt_mode_multi').classList.toggle('active', mode==='multi');
+  document.getElementById('bt_cnt_wrap').style.display = mode==='uniq' ? 'block' : 'none';
+  document.getElementById('bt_amt_wrap').style.display = mode==='uniq' ? 'block' : 'none';
+  document.getElementById('bt_multi_wrap').style.display = mode==='multi' ? 'block' : 'none';
+  btPrev();
+}
+
+function parseBtMulti(){
+  var raw=(document.getElementById('bt_multi')||{}).value||'';
+  return raw.split(',').map(function(s){return parseFloat(s.trim());}).filter(function(n){return !isNaN(n)&&n>0;});
+}
+
 function btPrev(){
   var p=document.getElementById('bt_prev');if(!p)return;
+  var pfx=((document.getElementById('bt_pfx')||{}).value||'VC').toUpperCase();
+  if(_btMode==='multi'){
+    var vals=parseBtMulti();
+    if(!vals.length){p.textContent='';return;}
+    var tot=vals.reduce(function(a,b){return a+b;},0);
+    p.textContent='Verranno generati '+vals.length+' voucher: \u20AC'+vals.join(' + \u20AC')+' (totale \u20AC'+tot.toLocaleString('it-IT')+') con prefisso '+pfx;
+    return;
+  }
   var cnt=parseInt((document.getElementById('bt_cnt')||{}).value)||0;
   var amt=parseFloat((document.getElementById('bt_amt')||{}).value)||0;
-  var pfx=((document.getElementById('bt_pfx')||{}).value||'VC').toUpperCase();
   p.textContent=cnt&&amt?'Verranno generati '+cnt+' voucher da \u20AC'+amt+' cad. (totale \u20AC'+(cnt*amt).toLocaleString('it-IT')+') con prefisso '+pfx:'';
 }
 
 function genBatch(){
   var pfx=((document.getElementById('bt_pfx')||{}).value||'VC').toUpperCase().slice(0,4);
-  var cnt=parseInt((document.getElementById('bt_cnt')||{}).value)||0;
-  var amt=parseFloat((document.getElementById('bt_amt')||{}).value)||0;
   var fuel=(document.getElementById('bt_fuel')||{}).value||'Qualsiasi';
   var exp=(document.getElementById('bt_exp')||{}).value||'';
   var emitId=(document.getElementById('bt_emit')||{}).value||'';
@@ -3784,7 +3819,22 @@ function genBatch(){
   var intest=(document.getElementById('bt_int')||{}).value||'generico';
   var msg=((document.getElementById('bt_mt')||{}).value||'').trim();
   var pdvs=getSelPdv('bt_pdv');
-  if(!cnt||!amt||!exp||!emitId){showToast('Compila tutti i campi obbligatori','err');return;}
+
+  // ── Determinar lista de importi in base alla modalità ──
+  var amounts=[]; // um valor por voucher a criar
+  var cnt=0;
+  if(_btMode==='multi'){
+    amounts=parseBtMulti();
+    cnt=amounts.length;
+    if(!cnt){showToast('Inserisci almeno un valore valido (es: 50, 30)','err');return;}
+  } else {
+    cnt=parseInt((document.getElementById('bt_cnt')||{}).value)||0;
+    var amt=parseFloat((document.getElementById('bt_amt')||{}).value)||0;
+    if(!cnt||!amt){showToast('Compila tutti i campi obbligatori','err');return;}
+    for(var k=0;k<cnt;k++) amounts.push(amt);
+  }
+  if(!exp||!emitId){showToast('Compila tutti i campi obbligatori','err');return;}
+
   var names=[];
   if(intest==='nominale'){
     names=((document.getElementById('bt_names')||{}).value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
@@ -3798,13 +3848,15 @@ function genBatch(){
   for(var i=0;i<cnt;i++){
     var seqId=pfx+('0000'+(nextNum+i)).slice(-4);
     var name=intest==='nominale'?names[i]:'Voucher Carburante';
+    var amt=amounts[i];
     var nv={id:seqId,int:intest,name:name,type:'dipendente',amt:amt,bal:amt,fuel:fuel,exp:exp,emitId:emitId,clienteId:clienteId,status:'valid',created:today(),usedAt:null,usedBy:null,notes:notes,msg:msg,pdvs:pdvs,tx:[]};
     vs.push(nv);_batchIds.push(nv.id);
   }
   setVouchers(vs);addLog('create','Lotto di '+cnt+' voucher — prefisso '+pfx);
 
   // ── CRIAÇÃO AUTOMÁTICA DE ORDINE ──
-  var totale = cnt * amt;
+  var totale = amounts.reduce(function(a,b){return a+b;},0);
+  var valoreMedio = totale / cnt;
   var ordini = getOrdini();
   var anoAtual = new Date().getFullYear();
   // Número sequencial do ano
@@ -3821,7 +3873,7 @@ function genBatch(){
     clienteNome: cliente ? (cliente.rag||cliente.nome) : '—',
     voucherIds: _batchIds.slice(),
     qtd: cnt,
-    valore: amt,
+    valore: valoreMedio,
     totale: totale,
     nFattura: '',
     dataFattura: '',
