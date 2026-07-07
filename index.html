@@ -4978,12 +4978,17 @@ function renderRepVoucher(c){
   var filtDa  = (document.getElementById('rv_da')||{}).value||'';
   var filtA   = (document.getElementById('rv_a')||{}).value||'';
 
-  // Campos configuráveis
+  // Campos configuráveis — persiste estado entre re-renders
+  if(!window._rvCampi) window._rvCampi = {};
+  var allCampi = ['numero','cliente','beneficiario','data_emissione','data_scadenza',
+   'valore','saldo','carburante','stato','pdv','note','tot_benef'];
   var campiChecked = {};
-  ['numero','cliente','beneficiario','data_emissione','data_scadenza',
-   'valore','saldo','carburante','stato','pdv','note'].forEach(function(k){
+  allCampi.forEach(function(k){
     var el = document.getElementById('rc_'+k);
-    campiChecked[k] = el ? el.checked : true;
+    if(el){
+      window._rvCampi[k] = el.checked;
+    }
+    campiChecked[k] = (k in window._rvCampi) ? window._rvCampi[k] : true;
   });
 
   // Filtrar vouchers
