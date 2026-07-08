@@ -941,27 +941,49 @@ tr:hover td{background:rgba(0,61,165,.02);}
 // ══════════════════════════════════════════════════════
 var _SB_URL = 'https://ycaismhhnunrzdllaswq.supabase.co';
 var _SB_KEY = 'sb_publishable_FK6qk0rOZ4s_I_EJzdUwHQ_JZLXsSSc';
+var _SB_TOKEN = null; // JWT token do utilizador autenticado
 var _cache = {vouchers:[],users:[],clienti:[],stazioni:[],pdv:[],messages:[],log:[],ordini:[],liquidazioni:[]};
 var _bm2Action = null;
 var _cacheLoaded = false;
+
+// ── Supabase Auth ──────────────────────────────────────
+function sbAuth(email, password){
+  return fetch(_SB_URL+'/auth/v1/token?grant_type=password', {
+    method: 'POST',
+    headers: {
+      'apikey': _SB_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({email: email, password: password})
+  }).then(function(r){ return r.json(); });
+}
+
+function sbSignOut(){
+  if(!_SB_TOKEN) return Promise.resolve();
+  return fetch(_SB_URL+'/auth/v1/logout', {
+    method: 'POST',
+    headers: {
+      'apikey': _SB_KEY,
+      'Authorization': 'Bearer '+_SB_TOKEN
+    }
+  }).catch(function(){});
+}
+
 // Gerente is now stored directly in Supabase stazioni.gerente_id column
 // No localStorage needed — truth lives in the DB
 
 function setStazioneGerenteDB(stazioneId, gerenteId){
-  // Persist gerente_id directly to Supabase
   return sbFetch('/stazioni?id=eq.'+encodeURIComponent(stazioneId), 'PATCH',
     {gerente_id: gerenteId || null},
     'return=minimal'
   ).then(function(r){
     if(!r.ok) throw new Error('PATCH gerente_id failed: ' + r.status);
-    console.log('✅ gerente_id saved to Supabase:', stazioneId, '=', gerenteId);
   }).catch(function(e){
-    console.error('❌ Erro ao salvar gerente no Supabase:', e);
+    console.error('Erro ao salvar gerente no Supabase:', e);
   });
 }
 
 function getStazioneGerente(stazioneId){
-  // Read from in-memory cache (already loaded from Supabase)
   if(!stazioneId) return null;
   var s = _cache.stazioni.find(function(x){ return x.id === stazioneId; });
   return s ? (s.gerente_id || s.gerenteId || null) : null;
@@ -972,7 +994,7 @@ function sbFetch(path, method, body, prefer){
     method: method||'GET',
     headers: {
       'apikey': _SB_KEY,
-      'Authorization': 'Bearer '+_SB_KEY,
+      'Authorization': 'Bearer '+(_SB_TOKEN || _SB_KEY),
       'Content-Type': 'application/json',
       'Prefer': prefer||'return=minimal'
     }
@@ -1420,34 +1442,71 @@ function seed(){
 // AUTH
 // ══════════════════════════════════════════════════════
 
+// Mapa email→username para login
+var _EMAIL_MAP = {
+  'admin':    'admin@fuelpass.it',
+  'helen':    'helen@fuelpass.it',
+  'azienda':  'azienda@fuelpass.it',
+  'mario':    'mario@fuelpass.it',
+  'sedico':   'sedico@fuelpass.it'
+};
+
 function doLogin(){
   var u=document.getElementById('li_user').value.trim().toLowerCase();
   var p=document.getElementById('li_pass').value;
   var btn=document.querySelector('.btnprimary');
   if(btn){btn.disabled=true;btn.textContent='Connessione in corso...';}
-  loadAllData(function(){
-    seed();
-    // Supabase is the source of truth for stazioni (incl. gerente_id) — no local merge needed
-    // Forcar actualizacao da mensagem M1 para versao mais recente
-    var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
-    var msgs = _cache.messages;
-    var m1 = msgs.find(function(m){return m.id==='M1';});
-    if(m1 && m1.txt !== m1correct){
-      m1.txt = m1correct;
-      setMessages(msgs);
-    }
-    var found=_cache.users.find(function(x){return x.user===u&&x.pass===p;});
-    if(found){
-      CU=found;
-      addLog('login','Accesso effettuato');
-      initApp();
-    } else {
+
+  // Converter username → email para Supabase Auth
+  var email = _EMAIL_MAP[u] || (u+'@fuelpass.it');
+
+  sbAuth(email, p).then(function(data){
+    if(data.error || !data.access_token){
       if(btn){btn.disabled=false;btn.textContent='Accedi →';}
       showToast('Credenziali non valide','err');
+      return;
     }
+    // Guardar token JWT — todas as chamadas ao Supabase usam este token
+    _SB_TOKEN = data.access_token;
+
+    // Carregar dados com o token válido
+    loadAllData(function(){
+      seed();
+      var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
+      var msgs = _cache.messages;
+      var m1 = msgs.find(function(m){return m.id==='M1';});
+      if(m1 && m1.txt !== m1correct){ m1.txt = m1correct; setMessages(msgs); }
+
+      // Encontrar utilizador pelo username na tabela utenti
+      var found = _cache.users.find(function(x){
+        return x.user === u || x.user === u.replace('@fuelpass.it','');
+      });
+      if(found){
+        CU = found;
+        addLog('login','Accesso effettuato');
+        initApp();
+      } else {
+        // Fallback: criar CU a partir dos metadados do token JWT
+        var meta = data.user && data.user.user_metadata ? data.user.user_metadata : {};
+        CU = {id: data.user.id, name: meta.username||u, user: meta.username||u, role: meta.role||'attendant', perms: ROLE_PERMS[meta.role||'attendant']||ROLE_PERMS.attendant};
+        addLog('login','Accesso effettuato');
+        initApp();
+      }
+    });
+  }).catch(function(){
+    if(btn){btn.disabled=false;btn.textContent='Accedi →';}
+    showToast('Errore di connessione','err');
   });
 }
-function logout(){addLog('logout','Disconnessione');CU=null;document.getElementById('app').style.display='none';document.getElementById('loginScreen').style.display='flex';}
+
+function logout(){
+  addLog('logout','Disconnessione');
+  sbSignOut();
+  _SB_TOKEN = null;
+  CU = null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
 
 // ══════════════════════════════════════════════════════
 // NAV
