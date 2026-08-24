@@ -427,7 +427,8 @@ tr:hover td{background:rgba(0,61,165,.02);}
 
   <div class="fld"><label>Nome Utente</label><input type="text" id="li_user" placeholder="username" onkeydown="if(event.keyCode===13)doLogin()"/></div>
   <div class="fld"><label>Password</label><input type="password" id="li_pass" placeholder="••••••" onkeydown="if(event.keyCode===13)doLogin()"/></div>
-  <button class="btnprimary" onclick="doLogin()">Accedi &#8594;</button>
+  <div id="loginErr" style="display:none;color:#c00;font-size:13px;margin-bottom:8px;padding:8px;background:#fff0f0;border-radius:6px;border:1px solid #fcc;"></div>
+  <button class="btnprimary" id="loginBtn" onclick="doLogin()">Accedi &#8594;</button>
   
 </div>
 </div>
@@ -1454,22 +1455,27 @@ var _EMAIL_MAP = {
 function doLogin(){
   var u=document.getElementById('li_user').value.trim().toLowerCase();
   var p=document.getElementById('li_pass').value;
-  var btn=document.querySelector('.btnprimary');
-  if(btn){btn.disabled=true;btn.textContent='Connessione in corso...';}
+  var btn=document.getElementById('loginBtn');
+  var errEl=document.getElementById('loginErr');
 
-  // Converter username → email para Supabase Auth
+  if(!u||!p){
+    if(errEl){errEl.textContent='Inserisci username e password.';errEl.style.display='block';}
+    return;
+  }
+  if(errEl) errEl.style.display='none';
+  if(btn){btn.disabled=true;btn.textContent='Connessione...';}
+
   var email = _EMAIL_MAP[u] || (u+'@fuelpass.it');
 
   sbAuth(email, p).then(function(data){
     if(data.error || !data.access_token){
       if(btn){btn.disabled=false;btn.textContent='Accedi →';}
-      showToast('Credenziali non valide','err');
+      if(errEl){errEl.textContent='Credenziali non valide. Riprova.';errEl.style.display='block';}
       return;
     }
-    // Guardar token JWT — todas as chamadas ao Supabase usam este token
     _SB_TOKEN = data.access_token;
+    if(btn) btn.textContent='Caricamento dati...';
 
-    // Carregar dados com o token válido
     loadAllData(function(){
       seed();
       var m1correct = "CARTA PERSONALE NON MONETIZZABILE, NON INTEGRABILE IN DENARO E NON CEDIBILE. PUO' ESSERE UTILIZZATA ANCHE IN PIU' VOLTE FINO A ESAURIMENTO DEL VALORE. DA UTILIZZARSI ENTRO LA DATA DI SCADENZA INDICATA SUL VOUCHER.";
@@ -1477,25 +1483,23 @@ function doLogin(){
       var m1 = msgs.find(function(m){return m.id==='M1';});
       if(m1 && m1.txt !== m1correct){ m1.txt = m1correct; setMessages(msgs); }
 
-      // Encontrar utilizador pelo username na tabela utenti
       var found = _cache.users.find(function(x){
         return x.user === u || x.user === u.replace('@fuelpass.it','');
       });
       if(found){
         CU = found;
-        addLog('login','Accesso effettuato');
-        initApp();
       } else {
-        // Fallback: criar CU a partir dos metadados do token JWT
         var meta = data.user && data.user.user_metadata ? data.user.user_metadata : {};
         CU = {id: data.user.id, name: meta.username||u, user: meta.username||u, role: meta.role||'attendant', perms: ROLE_PERMS[meta.role||'attendant']||ROLE_PERMS.attendant};
-        addLog('login','Accesso effettuato');
-        initApp();
       }
+      addLog('login','Accesso effettuato');
+      if(btn){btn.disabled=false;btn.textContent='Accedi →';}
+      initApp();
     });
-  }).catch(function(){
+  }).catch(function(e){
+    console.error('Login error:', e);
     if(btn){btn.disabled=false;btn.textContent='Accedi →';}
-    showToast('Errore di connessione','err');
+    if(errEl){errEl.textContent='Errore di connessione. Controlla la rete.';errEl.style.display='block';}
   });
 }
 
