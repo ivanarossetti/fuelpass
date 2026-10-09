@@ -5330,41 +5330,31 @@ function stampaRepVoucher(){
 
     // MONTAR O PDF — usando estilos inline para máxima compatibilidade
     var pdfHTML =
-      '<div id="printContent" style="padding:15mm;font-family:Inter,Arial,Helvetica,sans-serif;color:#1F2937;font-size:10px;line-height:1.4;">'
-      // Header
-      +'<table style="width:100%;border-collapse:collapse;margin-bottom:12px;"><tr>'
-        +'<td style="vertical-align:middle;">'
-          +'<span style="display:inline-block;background:#003DA5;color:#fff;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:900;letter-spacing:.04em;vertical-align:middle;">FP</span>'
-          +'<span style="display:inline-block;margin-left:10px;vertical-align:middle;">'
-            +'<span style="font-size:18px;font-weight:800;color:#003DA5;">FuelPass</span><br/>'
-            +'<span style="font-size:9px;color:#6B7280;letter-spacing:.06em;">GESTIONE BUONI CARBURANTE \u2014 CARBURANTE DOLOMITE</span>'
-          +'</span>'
+      '<div id="printContent" style="padding:12mm 15mm;font-family:Inter,Arial,Helvetica,sans-serif;color:#1F2937;font-size:10px;line-height:1.4;">'
+      // Header \u2014 logo + t\u00edtulo + info cliente numa \u00fanica banda
+      +'<table style="width:100%;border-collapse:collapse;margin-bottom:10px;"><tr>'
+        +'<td style="vertical-align:middle;width:44px;">'
+          +'<span style="display:inline-block;background:#003DA5;color:#fff;border-radius:6px;padding:5px 10px;font-size:15px;font-weight:900;letter-spacing:.04em;">FP</span>'
+        +'</td>'
+        +'<td style="vertical-align:middle;padding-left:10px;">'
+          +'<span style="font-size:16px;font-weight:800;color:#003DA5;">FuelPass</span>'
+          +'<span style="font-size:9px;color:#6B7280;margin-left:8px;letter-spacing:.04em;">GESTIONE BUONI CARBURANTE</span>'
         +'</td>'
         +'<td style="text-align:right;vertical-align:middle;">'
-          +'<span style="font-size:12px;font-weight:700;color:#1F2937;">Report Voucher Emessi</span><br/>'
-          +'<span style="font-size:10px;color:#6B7280;">'+fmtDate(today())+'</span>'
+          +'<span style="font-size:13px;font-weight:800;color:#1F2937;">'+escH(clNome)+'</span>'
+          +'<br/><span style="font-size:10px;color:#6B7280;">'+vs.length+' voucher &nbsp;|&nbsp; Totale: <strong style="color:#1F2937;">\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; Saldo: <strong style="color:#003DA5;">\u20ac'+totSaldo.toFixed(2)+'</strong></span>'
         +'</td>'
       +'</tr></table>'
-      +'<div style="border-top:3px solid #003DA5;margin-bottom:12px;"></div>'
-      // Info
-      +'<table style="width:100%;border-collapse:collapse;background:#EBF1FB;border-radius:6px;margin-bottom:12px;"><tr>'
-        +'<td style="padding:8px 12px;">'
-          +'<span style="font-size:9px;font-weight:700;color:#003DA5;text-transform:uppercase;letter-spacing:.06em;">Cliente</span><br/>'
-          +'<span style="font-size:14px;font-weight:700;">'+escH(clNome)+'</span>'
-        +'</td>'
-        +'<td style="padding:8px 12px;text-align:right;font-size:10px;color:#6B7280;">'
-          +vs.length+' voucher &nbsp;|&nbsp; Totale: <strong>\u20ac'+totValore.toFixed(2)+'</strong> &nbsp;|&nbsp; Saldo: <strong>\u20ac'+totSaldo.toFixed(2)+'</strong>'
-        +'</td>'
-      +'</tr></table>'
+      +'<div style="border-top:3px solid #003DA5;margin-bottom:10px;"></div>'
       // Tabela
       +'<table style="width:100%;border-collapse:collapse;">'
         +'<thead><tr>'+thCells+'</tr></thead>'
         +'<tbody>'+rows+'</tbody>'
       +'</table>'
       + subtotHTML
-      // Footer
-      +'<div style="margin-top:14px;padding-top:8px;border-top:1px solid #E5E7EB;font-size:9px;color:#9CA3AF;text-align:center;">'
-        +'FuelPass \u2014 Carburante Dolomite / Enilive &nbsp;|&nbsp; '+fmtDate(today())+' &nbsp;|&nbsp; Riservato e confidenziale'
+      // Footer \u2014 1 linha s\u00f3
+      +'<div style="margin-top:12px;padding-top:6px;border-top:1px solid #E5E7EB;font-size:8px;color:#9CA3AF;text-align:center;">'
+        +'FuelPass \u2014 Carburante Dolomite / Enilive &nbsp;|&nbsp; https://fuelpass.it &nbsp;|&nbsp; Riservato e confidenziale'
       +'</div>'
       +'</div>';
 
