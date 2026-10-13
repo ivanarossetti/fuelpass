@@ -1015,7 +1015,18 @@ function sbLoad(path, method){
 function sbUpsert(table, data){
   if(!Array.isArray(data)) data=[data];
   if(!data.length) return Promise.resolve();
-  return sbFetch('/'+table, 'POST', data, 'resolution=merge-duplicates,return=minimal');
+  // Manda em lotes de 50 para evitar falhas silenciosas com arrays grandes
+  var CHUNK = 50;
+  if(data.length <= CHUNK){
+    return sbFetch('/'+table, 'POST', data, 'resolution=merge-duplicates,return=minimal');
+  }
+  var chunks = [];
+  for(var i=0; i<data.length; i+=CHUNK) chunks.push(data.slice(i, i+CHUNK));
+  return chunks.reduce(function(p, chunk){
+    return p.then(function(){
+      return sbFetch('/'+table, 'POST', chunk, 'resolution=merge-duplicates,return=minimal');
+    });
+  }, Promise.resolve());
 }
 
 function sbDeleteRow(table, id){
@@ -3940,7 +3951,15 @@ function genBatch(){
     var nv={id:seqId,int:intest,name:name,type:'dipendente',amt:amt,bal:amt,fuel:fuel,exp:exp,emitId:emitId,clienteId:clienteId,status:'valid',created:today(),usedAt:null,usedBy:null,notes:notes,msg:msg,pdvs:pdvs,tx:[]};
     vs.push(nv);_batchIds.push(nv.id);
   }
-  setVouchers(vs);addLog('create','Lotto di '+cnt+' voucher — prefisso '+pfx);
+  // Atualiza cache local
+  _cache.vouchers = vs.slice();
+  // Salva APENAS os novos vouchers no Supabase (mais seguro e eficiente)
+  var novos = vs.filter(function(v){ return _batchIds.indexOf(v.id) > -1; });
+  sbUpsert('vouchers', novos.map(vToSb)).catch(function(e){
+    console.warn('Erro ao salvar lotto no Supabase:', e);
+    showToast('Attenzione: errore nel salvataggio. Riprova.', 'err');
+  });
+  addLog('create','Lotto di '+cnt+' voucher — prefisso '+pfx);
 
   // ── CRIAÇÃO AUTOMÁTICA DE ORDINE ──
   var totale = amounts.reduce(function(a,b){return a+b;},0);
