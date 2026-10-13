@@ -5059,8 +5059,8 @@ function renderRepVoucher(c){
   var lista = vs.filter(function(v){
     if(filtCl && v.clienteId !== filtCl) return false;
     if(filtSt && vSt(v) !== filtSt) return false;
-    if(filtDa && v.created < filtDa) return false;
-    if(filtA  && v.created > filtA)  return false;
+    if(filtDa && (v.created||'').substring(0,10) < filtDa) return false;
+    if(filtA  && (v.created||'').substring(0,10) > filtA)  return false;
     return true;
   });
   lista.sort(function(a,b){return (a.id||'').localeCompare(b.id||'');});
