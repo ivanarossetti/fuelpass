@@ -1015,16 +1015,21 @@ function sbLoad(path, method){
 function sbUpsert(table, data){
   if(!Array.isArray(data)) data=[data];
   if(!data.length) return Promise.resolve();
-  // Manda em lotes de 50 para evitar falhas silenciosas com arrays grandes
+  // Manda em lotes de 50 e verifica cada resposta — sem falhas silenciosas
   var CHUNK = 50;
-  if(data.length <= CHUNK){
-    return sbFetch('/'+table, 'POST', data, 'resolution=merge-duplicates,return=minimal');
-  }
   var chunks = [];
   for(var i=0; i<data.length; i+=CHUNK) chunks.push(data.slice(i, i+CHUNK));
   return chunks.reduce(function(p, chunk){
     return p.then(function(){
-      return sbFetch('/'+table, 'POST', chunk, 'resolution=merge-duplicates,return=minimal');
+      return sbFetch('/'+table, 'POST', chunk, 'resolution=merge-duplicates,return=minimal')
+        .then(function(r){
+          if(!r.ok){
+            return r.text().then(function(txt){
+              throw new Error('Supabase error '+r.status+': '+txt);
+            });
+          }
+          return r;
+        });
     });
   }, Promise.resolve());
 }
@@ -3832,19 +3837,30 @@ function prorogaScadenza(id){
 // BATCH
 // ══════════════════════════════════════════════════════
 function openBatch(){
-  var ss=getStazioniByUser();var cs=getClientiByUser();
-  document.getElementById('bt_emit').innerHTML=ss.map(function(s){return'<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('');
-  document.getElementById('bt_cliente').innerHTML='<option value="">— Nessun cliente —</option>'+cs.map(function(c){return'<option value="'+c.id+'">'+escH(c.nome)+'</option>';}).join('');
-  var d=new Date();d.setMonth(d.getMonth()+3);
-  document.getElementById('bt_exp').value=d.toISOString().split('T')[0];
-  fillPdvCk('bt_pdv',[]);fillMsgSel('bt_ms');
-  document.getElementById('bt_mt').value='';
-  document.getElementById('bt_cnt').value='';
-  document.getElementById('bt_amt').value='';
-  document.getElementById('bt_multi').value='';
-  setBtMode('uniq', document.getElementById('bt_mode_uniq'));
-  updateEmitLogo('bt_emit','bt_emit_logo');
-  openM('batchModal');
+  // Recarrega dados frescos do Supabase antes de abrir — evita cache desatualizado
+  showToast('Sincronizzazione dati...','info');
+  sbLoad('/vouchers?select=*').then(function(data){
+    if(Array.isArray(data)) _cache.vouchers = data.map(vFromSb);
+    return sbLoad('/clienti?select=*');
+  }).then(function(data){
+    if(Array.isArray(data)) _cache.clienti = data;
+  }).catch(function(e){
+    console.warn('Refresh pre-batch:', e);
+  }).then(function(){
+    var ss=getStazioniByUser();var cs=getClientiByUser();
+    document.getElementById('bt_emit').innerHTML=ss.map(function(s){return'<option value="'+s.id+'">'+escH(s.nome)+'</option>';}).join('');
+    document.getElementById('bt_cliente').innerHTML='<option value="">— Nessun cliente —</option>'+cs.map(function(c){return'<option value="'+c.id+'">'+escH(c.nome)+'</option>';}).join('');
+    var d=new Date();d.setMonth(d.getMonth()+3);
+    document.getElementById('bt_exp').value=d.toISOString().split('T')[0];
+    fillPdvCk('bt_pdv',[]);fillMsgSel('bt_ms');
+    document.getElementById('bt_mt').value='';
+    document.getElementById('bt_cnt').value='';
+    document.getElementById('bt_amt').value='';
+    document.getElementById('bt_multi').value='';
+    setBtMode('uniq', document.getElementById('bt_mode_uniq'));
+    updateEmitLogo('bt_emit','bt_emit_logo');
+    openM('batchModal');
+  });
 }
 
 function tgBtN(){
@@ -3939,34 +3955,90 @@ function genBatch(){
     names=((document.getElementById('bt_names')||{}).value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     if(names.length<cnt){showToast('Inserisci almeno '+cnt+' nomi (hai '+names.length+')','err');return;}
   }
-  var vs=getVouchers();
-  _batchIds=[];
-  var existingNums=vs.filter(function(v){return v.id.indexOf(pfx)===0;})
-    .map(function(v){return parseInt(v.id.replace(pfx,''),10);}).filter(function(n){return!isNaN(n);});
-  var nextNum=existingNums.length?Math.max.apply(null,existingNums)+1:1;
-  for(var i=0;i<cnt;i++){
-    var seqId=pfx+('0000'+(nextNum+i)).slice(-4);
-    var name=intest==='nominale'?names[i]:'Voucher Carburante';
-    var amt=amounts[i];
-    var nv={id:seqId,int:intest,name:name,type:'dipendente',amt:amt,bal:amt,fuel:fuel,exp:exp,emitId:emitId,clienteId:clienteId,status:'valid',created:today(),usedAt:null,usedBy:null,notes:notes,msg:msg,pdvs:pdvs,tx:[]};
-    vs.push(nv);_batchIds.push(nv.id);
-  }
-  // Atualiza cache local
-  _cache.vouchers = vs.slice();
-  // Salva APENAS os novos vouchers no Supabase (mais seguro e eficiente)
-  var novos = vs.filter(function(v){ return _batchIds.indexOf(v.id) > -1; });
-  sbUpsert('vouchers', novos.map(vToSb)).catch(function(e){
-    console.warn('Erro ao salvar lotto no Supabase:', e);
-    showToast('Attenzione: errore nel salvataggio. Riprova.', 'err');
-  });
-  addLog('create','Lotto di '+cnt+' voucher — prefisso '+pfx);
+  // ── Consulta o Supabase para obter o maior ID existente com este prefixo ──
+  // Evita duplicados quando o cache local está desatualizado
+  showToast('Verifica numerazione in corso...', 'info');
+  var pfxFinal = pfx, amountsFinal = amounts, cntFinal = cnt, namesFinal = names;
+  var intestFinal = intest, fuelFinal = fuel, expFinal = exp, emitIdFinal = emitId;
+  var clienteIdFinal = clienteId, notesFinal = notes, msgFinal = msg, pdvsFinal = pdvs;
 
+  sbFetch('/vouchers?select=id&id=like.'+encodeURIComponent(pfxFinal+'*')+'&order=id.desc&limit=1', 'GET')
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      // Maior número no Supabase
+      var sbMax = 0;
+      if(rows && rows.length){
+        sbMax = parseInt((rows[0].id||'').replace(pfxFinal,''),10)||0;
+      }
+      // Maior número no cache local
+      var vs = getVouchers();
+      var localMax = 0;
+      vs.filter(function(v){return v.id.indexOf(pfxFinal)===0;})
+        .forEach(function(v){
+          var n = parseInt(v.id.replace(pfxFinal,''),10)||0;
+          if(n > localMax) localMax = n;
+        });
+      // Usa o maior entre Supabase e cache local — garante sem duplicados
+      var nextNum = Math.max(sbMax, localMax) + 1;
+
+      _batchIds = [];
+      for(var i=0; i<cntFinal; i++){
+        var seqId = pfxFinal+('0000'+(nextNum+i)).slice(-4);
+        var name = intestFinal==='nominale' ? namesFinal[i] : 'Voucher Carburante';
+        var amt = amountsFinal[i];
+        var nv = {id:seqId,int:intestFinal,name:name,type:'dipendente',amt:amt,bal:amt,
+          fuel:fuelFinal,exp:expFinal,emitId:emitIdFinal,clienteId:clienteIdFinal,
+          status:'valid',created:today(),usedAt:null,usedBy:null,
+          notes:notesFinal,msg:msgFinal,pdvs:pdvsFinal,tx:[]};
+        vs.push(nv); _batchIds.push(nv.id);
+      }
+
+      // Atualiza cache local
+      _cache.vouchers = vs.slice();
+      // Salva APENAS os novos vouchers no Supabase
+      var novos = vs.filter(function(v){ return _batchIds.indexOf(v.id) > -1; });
+      sbUpsert('vouchers', novos.map(vToSb))
+        .then(function(){
+          addLog('create','Lotto di '+cntFinal+' voucher — prefisso '+pfxFinal);
+          _doBatchAfterSave(cntFinal, amountsFinal, clienteIdFinal);
+        })
+        .catch(function(e){
+          console.warn('Erro ao salvar lotto:', e);
+          showToast('Errore nel salvataggio. Riprova.', 'err');
+        });
+    })
+    .catch(function(e){
+      console.warn('Erro ao verificar numeração:', e);
+      // Fallback: usa apenas o cache local
+      var vs = getVouchers();
+      var existingNums = vs.filter(function(v){return v.id.indexOf(pfxFinal)===0;})
+        .map(function(v){return parseInt(v.id.replace(pfxFinal,''),10);}).filter(Boolean);
+      var nextNum = existingNums.length ? Math.max.apply(null,existingNums)+1 : 1;
+      _batchIds = [];
+      for(var i=0;i<cntFinal;i++){
+        var seqId=pfxFinal+('0000'+(nextNum+i)).slice(-4);
+        var nv={id:seqId,int:intestFinal,name:intestFinal==='nominale'?namesFinal[i]:'Voucher Carburante',
+          type:'dipendente',amt:amountsFinal[i],bal:amountsFinal[i],fuel:fuelFinal,exp:expFinal,
+          emitId:emitIdFinal,clienteId:clienteIdFinal,status:'valid',created:today(),
+          usedAt:null,usedBy:null,notes:notesFinal,msg:msgFinal,pdvs:pdvsFinal,tx:[]};
+        vs.push(nv);_batchIds.push(nv.id);
+      }
+      _cache.vouchers = vs.slice();
+      var novos = vs.filter(function(v){return _batchIds.indexOf(v.id)>-1;});
+      sbUpsert('vouchers', novos.map(vToSb)).catch(function(e2){console.warn(e2);});
+      addLog('create','Lotto di '+cntFinal+' voucher — prefisso '+pfxFinal);
+      _doBatchAfterSave(cntFinal, amountsFinal, clienteIdFinal);
+    });
+  // A função continua assincronamente via _doBatchAfterSave
+  return;
+}
+
+function _doBatchAfterSave(cnt, amounts, clienteId){
   // ── CRIAÇÃO AUTOMÁTICA DE ORDINE ──
   var totale = amounts.reduce(function(a,b){return a+b;},0);
   var valoreMedio = totale / cnt;
   var ordini = getOrdini();
   var anoAtual = new Date().getFullYear();
-  // Número sequencial do ano
   var numAnno = ordini.filter(function(o){
     return o.numero && o.numero.indexOf('ORD-'+anoAtual+'-') === 0;
   }).length + 1;
