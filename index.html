@@ -1056,11 +1056,11 @@ function vFromSb(r){
     pdvs:r.pdvs||[], tx:r.tx||[]};
 }
 function uToSb(u){
-  return {id:u.id, name:u.name, username:u.user, pass:u.pass,
+  return {id:u.id, name:u.name, username:u.user,
     role:u.role||'attendant', cliente_id:u.clienteId||null};
 }
 function uFromSb(r){
-  return {id:r.id, name:r.name, user:r.username, pass:r.pass,
+  return {id:r.id, name:r.name, user:r.username,
     role:r.role||'attendant', clienteId:r.cliente_id||''};
 }
 function mToSb(m){ return {id:m.id, lbl:m.lbl, txt:m.txt}; }
@@ -1434,14 +1434,7 @@ function renderBarcode(elId,value){
 // ══════════════════════════════════════════════════════
 function seed(){
   // Crea utenti base solo se non esistono
-  if(_cache.users.length===0){
-    setUsers([
-      {id:'U1',name:'Admin Principale',user:'admin',pass:'1234',role:'admin',clienteId:'',pdvId:'',perms:ROLE_PERMS.admin},
-      {id:'U2',name:'Operatore PdV',user:'operatore',pass:'1234',role:'attendant',clienteId:'',pdvId:'',perms:ROLE_PERMS.attendant},
-      {id:'U3',name:'Cliente Azienda',user:'azienda',pass:'1234',role:'company',clienteId:'',pdvId:'',perms:ROLE_PERMS.company},
-      {id:'U4',name:'Dipendente',user:'dipendente',pass:'1234',role:'employee',clienteId:'',pdvId:'',perms:ROLE_PERMS.employee}
-    ]);
-  }
+  // Utenti gestiti tramite Supabase Auth — nessun seed locale
   // Crea messaggio standard solo se non esistono
   if(_cache.messages.length===0){
     setMessages([
